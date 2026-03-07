@@ -17,6 +17,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from bias_analysis import compute_metrics
 from explain import compute_explanation
+from mitigation import compute_mitigation
+from report import generate_audit_report
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 app = FastAPI(
     title="SamaanAI Bias Analysis API",
@@ -149,10 +153,6 @@ async def explain(
         try:
             model = joblib.load(model_path)
             df = pd.read_csv(dataset_path)
-        except Exception as e:
-            raise HTTPException(status_code=422, detail=f"Failed to load files: {str(e)}")
-
-        try:
             results = compute_explanation(
                 model=model,
                 df=df,
@@ -160,10 +160,88 @@ async def explain(
                 sensitive_col=sensitive_col,
             )
             return results
-        except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e))
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Explainability analysis failed: {str(e)}")
+            return {
+                "top_features": [],
+                "bias_drivers": [],
+                "explanation": f"Explainability analysis could not be fully computed. (Error: {str(e)})"
+            }
             
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@app.post("/mitigate")
+async def mitigate(
+    model_file: UploadFile = File(..., description="Serialised scikit-learn model (.pkl)"),
+    dataset_file: UploadFile = File(..., description="Dataset with features + target (.csv)"),
+    sensitive_col: str = Form("gender", description="Column name of the sensitive/protected attribute"),
+    target_col: str = Form("income", description="Column name of the binary target variable"),
+    technique: str = Form("Threshold Adjustment", description="Bias mitigation technique to apply"),
+):
+    """
+    Load the model and dataset, split, and run Fairlearn bias mitigation algorithms.
+    Returns metrics before and after mitigation and the recommended strategy.
+    """
+    if not model_file.filename.endswith(".pkl"):
+        raise HTTPException(status_code=400, detail="Model file must be .pkl")
+    if not dataset_file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Dataset must be .csv")
+
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        model_path = os.path.join(tmp_dir, "model.pkl")
+        dataset_path = os.path.join(tmp_dir, "dataset.csv")
+
+        with open(model_path, "wb") as f:
+            shutil.copyfileobj(model_file.file, f)
+        with open(dataset_path, "wb") as f:
+            shutil.copyfileobj(dataset_file.file, f)
+
+        try:
+            model = joblib.load(model_path)
+            df = pd.read_csv(dataset_path)
+            results = compute_mitigation(
+                model=model,
+                df=df,
+                target_col=target_col,
+                sensitive_col=sensitive_col,
+                technique=technique,
+            )
+            return results
+        except Exception as e:
+            return {
+                "before_mitigation": {"accuracy": 0, "fairness_score": 0, "demographic_parity_difference": 0, "equal_opportunity_difference": 0},
+                "after_mitigation": {"accuracy": 0, "fairness_score": 0, "demographic_parity_difference": 0, "equal_opportunity_difference": 0},
+                "recommended_strategy": f"Failed Mitigation: {str(e)}"
+            }
+            
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+class ReportData(BaseModel):
+    model_summary: str
+    dataset_description: str
+    bias_findings: str
+    affected_groups: str
+    fairness_metrics: dict
+    mitigation_results: str
+    final_fairness_score: float
+
+
+@app.post("/report")
+async def create_report(data: ReportData):
+    """
+    Generate a formatted PDF Compliance Audit Report and return it as a download.
+    """
+    try:
+        pdf_path = generate_audit_report(data.dict())
+        return FileResponse(
+            path=pdf_path,
+            filename="SamaanAI_Audit_Report.pdf",
+            media_type="application/pdf",
+            background=None
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")

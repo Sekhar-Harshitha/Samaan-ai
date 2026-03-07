@@ -56,8 +56,12 @@ def compute_explanation(
 
     # Encode categorical features for correlation and prediction
     X_encoded = X_data.copy()
-    for col in X_encoded.select_dtypes(include=["object", "category"]).columns:
-        X_encoded[col] = pd.Categorical(X_encoded[col]).codes
+    for col in X_encoded.columns:
+        if not pd.api.types.is_numeric_dtype(X_encoded[col]):
+            X_encoded[col] = pd.Categorical(X_encoded[col]).codes
+            
+    # Ensure only numeric columns are used for statistical calculations
+    X_encoded = X_encoded.select_dtypes(include=['number'])
 
     # 3. Compute Feature Importance
     importances = {}
@@ -104,15 +108,25 @@ def compute_explanation(
     bias_drivers = []
     if sensitive_col in df.columns:
         sensitive = df[sensitive_col]
-        # Encode sensitive attribute if it's categorical
-        if sensitive.dtype == "object" or sensitive.dtype.name == "category":
-            sensitive = pd.Categorical(sensitive).codes
+        # Encode sensitive attribute if it's not numeric
+        if not pd.api.types.is_numeric_dtype(sensitive):
+            sensitive = pd.Series(pd.Categorical(sensitive).codes, index=df.index)
+        else:
+            sensitive = pd.Series(sensitive, index=df.index)
             
         correlations = {}
         for feat in expected_features:
-            if X_encoded[feat].std() > 0 and sensitive.std() > 0:
-                corr = X_encoded[feat].corr(pd.Series(sensitive, index=X_encoded.index))
-                correlations[feat] = abs(corr)
+            if feat in X_encoded.columns:
+                try:
+                    feat_std = X_encoded[feat].std()
+                    sens_std = sensitive.std()
+                    if pd.notna(feat_std) and feat_std > 0 and pd.notna(sens_std) and sens_std > 0:
+                        corr = X_encoded[feat].corr(sensitive)
+                        correlations[feat] = abs(corr) if pd.notna(corr) else 0.0
+                    else:
+                        correlations[feat] = 0.0
+                except Exception:
+                    correlations[feat] = 0.0
             else:
                 correlations[feat] = 0.0
                 
