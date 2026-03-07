@@ -1,12 +1,6 @@
-"""
-explain.py
-Explainability Layer for SamaanAI Phase 4.
-Extracts feature importance and identifies bias drivers.
-"""
-
 import pandas as pd
 import numpy as np
-from sklearn.inspection import permutation_importance
+import shap
 
 def compute_explanation(
     model,
@@ -14,8 +8,11 @@ def compute_explanation(
     target_col: str,
     sensitive_col: str,
 ) -> dict:
-
-    # 1. Normalize columns (similar to bias_analysis.py)
+    """
+    Upgraded Explainability layer using SHAP.
+    Computes global feature importance and bias-specific impacts.
+    """
+    # 1. Normalize columns
     df.columns = df.columns.str.strip().str.lower()
     target_col = target_col.strip().lower()
     sensitive_col = sensitive_col.strip().lower()
@@ -34,115 +31,108 @@ def compute_explanation(
     if hasattr(model, "feature_names_in_"):
         expected_features = list(model.feature_names_in_)
     else:
+        # Fallback to standard features if not present
         expected_features = [
             "age", "fnlwgt", "education-num", 
             "hours-per-week", "capital-gain", "capital-loss"
         ]
 
-    # Build Feature Matrix X and Target y
     X_data = pd.DataFrame(index=df.index)
     for feat in expected_features:
         if feat in df.columns:
-             X_data[feat] = df[feat]
+            X_data[feat] = df[feat]
         else:
-             X_data[feat] = 0
-             
-    # Handle Target
-    if target_col in df.columns:
-        y_true = df[target_col].astype(str).str.strip().replace({"<=50k": 0, ">50k": 1, "<=50K": 0, ">50K": 1})
-        y_true = pd.to_numeric(y_true, errors="coerce").fillna(0).astype(int)
-    else:
-        raise ValueError(f"Target column '{target_col}' not found.")
+            X_data[feat] = 0
 
-    # Encode categorical features for correlation and prediction
+    # Ensure numeric encoding for SHAP
     X_encoded = X_data.copy()
     for col in X_encoded.columns:
         if not pd.api.types.is_numeric_dtype(X_encoded[col]):
             X_encoded[col] = pd.Categorical(X_encoded[col]).codes
-            
-    # Ensure only numeric columns are used for statistical calculations
-    X_encoded = X_encoded.select_dtypes(include=['number'])
-
-    # 3. Compute Feature Importance
-    importances = {}
     
-    # Check if model has direct feature importances (e.g., RandomForest, XGBoost)
-    if hasattr(model, "feature_importances_"):
-        imps = model.feature_importances_
-        for i, feat in enumerate(expected_features):
-            importances[feat] = float(imps[i])
-    # Check for linear models (coefficients)
-    elif hasattr(model, "coef_"):
-        imps = np.abs(model.coef_[0])
-        # Normalize coefficients to sum to 1 to resemble importance scores
-        imps_sum = np.sum(imps)
-        if imps_sum > 0:
-            imps = imps / imps_sum
-        for i, feat in enumerate(expected_features):
-             importances[feat] = float(imps[i])
-    else:
-        # Fallback: Permutation Importance
+    # Use a sample for SHAP calculation for efficiency
+    sample_size = min(len(X_encoded), 200)
+    X_sample = X_encoded.sample(n=sample_size, random_state=42)
+
+    # 3. Compute SHAP Values
+    try:
+        # Try TreeExplainer for tree models, fall back to KernelExplainer/Explainer
         try:
-             # Subsample for speed if dataset is large
-             if len(df) > 5000:
-                  X_sample = X_encoded.sample(n=5000, random_state=42)
-                  y_sample = y_true.loc[X_sample.index]
-             else:
-                  X_sample = X_encoded
-                  y_sample = y_true
-                  
-             r = permutation_importance(model, X_sample, y_sample, n_repeats=5, random_state=42)
-             for i, feat in enumerate(expected_features):
-                 importances[feat] = float(np.abs(r.importances_mean[i]))
-        except Exception as e:
-             # If permutation fails, just return equal weights
-             weight = 1.0 / len(expected_features) if len(expected_features) > 0 else 0
-             for feat in expected_features:
-                  importances[feat] = weight
+            explainer = shap.Explainer(model, X_encoded)
+            shap_values = explainer(X_sample)
+        except Exception:
+            # Fallback to a simpler explainer if the model is complex
+            explainer = shap.Explainer(model.predict, X_sample)
+            shap_values = explainer(X_sample)
 
-    # Sort and get top 5
-    sorted_imps = sorted(importances.items(), key=lambda item: item[1], reverse=True)
-    top_features = [{"feature": k, "importance": round(v, 4)} for k, v in sorted_imps[:5]]
-
-    # 4. Compute Bias Drivers (Correlation with Sensitive Attribute)
-    bias_drivers = []
-    if sensitive_col in df.columns:
-        sensitive = df[sensitive_col]
-        # Encode sensitive attribute if it's not numeric
-        if not pd.api.types.is_numeric_dtype(sensitive):
-            sensitive = pd.Series(pd.Categorical(sensitive).codes, index=df.index)
+        # Get SHAP values correctly depending on the explainer type
+        if hasattr(shap_values, "values"):
+            values = shap_values.values
         else:
-            sensitive = pd.Series(sensitive, index=df.index)
-            
-        correlations = {}
-        for feat in expected_features:
-            if feat in X_encoded.columns:
-                try:
-                    feat_std = X_encoded[feat].std()
-                    sens_std = sensitive.std()
-                    if pd.notna(feat_std) and feat_std > 0 and pd.notna(sens_std) and sens_std > 0:
-                        corr = X_encoded[feat].corr(sensitive)
-                        correlations[feat] = abs(corr) if pd.notna(corr) else 0.0
-                    else:
-                        correlations[feat] = 0.0
-                except Exception:
-                    correlations[feat] = 0.0
-            else:
-                correlations[feat] = 0.0
-                
-        # Get top 2 features with highest correlation with sensitive attribute
-        sorted_corr = sorted(correlations.items(), key=lambda item: item[1], reverse=True)
-        bias_drivers = [k for k, v in sorted_corr[:2] if v > 0.05] # Require at least a small correlation
+            values = shap_values
+
+        # If multi-class/probability, take the first class/output (e.g., binary)
+        if len(values.shape) == 3:
+            values = values[:, :, 1] if values.shape[2] > 1 else values[:, :, 0]
+
+        # 4. Global Feature Importance (Mean Absolute SHAP)
+        global_importance = np.abs(values).mean(axis=0)
+        importances = {feat: float(global_importance[i]) for i, feat in enumerate(expected_features)}
         
-    if not bias_drivers and top_features:
-         bias_drivers = [top_features[0]["feature"]]
+        # Sort and get top
+        sorted_imps = sorted(importances.items(), key=lambda item: item[1], reverse=True)
+        top_features = [{"feature": k, "importance": round(v, 4)} for k, v in sorted_imps[:5]]
 
-    # 5. Generate Text Explanation
-    driver_text = " and ".join(bias_drivers) if bias_drivers else "certain features"
-    explanation = f"Model predictions are strongly influenced by {driver_text}, which correlate with the sensitive attribute ({sensitive_col}). This suggests potential systemic bias embedded in these variables."
+        # 5. Identify Bias Drivers (Correlation of SHAP values with Sensitive attribute)
+        bias_drivers_data = []
+        if sensitive_col in df.columns:
+            sensitive = df.loc[X_sample.index, sensitive_col]
+            if not pd.api.types.is_numeric_dtype(sensitive):
+                sensitive_coded = pd.Categorical(sensitive).codes
+            else:
+                sensitive_coded = sensitive.values
+            
+            for i, feat in enumerate(expected_features):
+                # Correlation between feature's SHAP contribution and sensitive attribute
+                if np.std(values[:, i]) > 0 and np.std(sensitive_coded) > 0:
+                    corr = np.corrcoef(values[:, i], sensitive_coded)[0, 1]
+                    bias_drivers_data.append({"feature": feat, "impact": abs(float(corr))})
+        
+        # Sort by bias impact
+        bias_drivers_data = sorted(bias_drivers_data, key=lambda x: x["impact"], reverse=True)
+        top_bias_features = bias_drivers_data[:5]
 
-    return {
-        "top_features": top_features,
-        "bias_drivers": bias_drivers,
-        "explanation": explanation
-    }
+        # 6. SHAP Summary Data (for JS visualization)
+        # We'll provide a few data points for each top feature to simulate a summary plot
+        summary_plot_data = []
+        for feat_idx, feat in enumerate(expected_features):
+            if any(tf["feature"] == feat for tf in top_features):
+                # Sample 50 points for each top feature
+                for j in range(min(50, len(X_sample))):
+                    summary_plot_data.append({
+                        "feature": feat,
+                        "shapValue": float(values[j, feat_idx]),
+                        "featureValue": float(X_sample.iloc[j, feat_idx])
+                    })
+
+        # 7. Final Explanation
+        drivers = [d["feature"] for d in top_bias_features if d["impact"] > 0.1]
+        driver_text = " and ".join(drivers[:2]) if drivers else "certain patterns"
+        explanation = f"Using SHAP analysis, we identified that '{driver_text}' have a significant impact on decision variance across demographic groups. This indicates these features are the primary drivers of potential bias."
+
+        return {
+            "top_features": top_features,
+            "top_bias_features": top_bias_features,
+            "shap_summary": summary_plot_data,
+            "explanation": explanation
+        }
+
+    except Exception as e:
+        print(f"SHAP error: {str(e)}")
+        # Fallback to simple mean if SHAP fails entirely
+        return {
+            "top_features": [{"feature": f, "importance": 0.1} for f in expected_features[:5]],
+            "top_bias_features": [{"feature": f, "impact": 0.05} for f in expected_features[:5]],
+            "shap_summary": [],
+            "explanation": f"SHAP analysis encountered an error: {str(e)}. Falling back to baseline importance."
+        }

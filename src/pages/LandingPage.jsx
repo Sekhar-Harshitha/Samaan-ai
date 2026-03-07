@@ -10,7 +10,7 @@ class ErrorBoundary extends Component {
         super(props);
         this.state = { hasError: false };
     }
-    static getDerivedStateFromError(error) {
+    static getDerivedStateFromError() {
         return { hasError: true };
     }
     render() {
@@ -27,6 +27,7 @@ class ErrorBoundary extends Component {
 }
 
 const LandingPage = () => {
+
     return (
         <ErrorBoundary>
             <div className="landing-layout">
@@ -79,7 +80,7 @@ const LandingPage = () => {
                     >
                         <div style={{ position: 'relative' }}>
                             <FairnessRadar size={550} />
-                            {/* Decorative HUD Elements */}
+                            {/* HUD Decor */}
                             <div style={{ position: 'absolute', top: '-20px', left: '-20px', width: '40px', height: '40px', borderLeft: '2px solid var(--accent-primary)', borderTop: '2px solid var(--accent-primary)' }} />
                             <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', width: '40px', height: '40px', borderRight: '2px solid var(--accent-primary)', borderBottom: '2px solid var(--accent-primary)' }} />
                         </div>
@@ -133,6 +134,5 @@ const LandingPage = () => {
         </ErrorBoundary>
     );
 };
-
 
 export default LandingPage;

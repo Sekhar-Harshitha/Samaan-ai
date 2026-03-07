@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
 
 const AuditFeed = () => {
@@ -8,7 +8,7 @@ const AuditFeed = () => {
         "Security Protocol: ACTIVE"
     ]);
 
-    const phrases = [
+    const phrases = useMemo(() => [
         "Analyzing dataset for structural imbalance...",
         "Detecting protected attributes in neural layers...",
         "Evaluating demographic parity coefficients...",
@@ -19,7 +19,7 @@ const AuditFeed = () => {
         "Identifying high-risk demographic clusters...",
         "Measuring statistical parity gap: +14.2%",
         "Generating initial bias investigation report..."
-    ];
+    ], []);
 
     const scrollRef = useRef(null);
 
@@ -33,7 +33,7 @@ const AuditFeed = () => {
         }, 3000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [phrases]);
 
     useEffect(() => {
         if (scrollRef.current) {

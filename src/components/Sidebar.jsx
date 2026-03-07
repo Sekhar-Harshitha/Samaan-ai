@@ -7,7 +7,8 @@ import {
   Activity,
   ShieldAlert,
   FileCode,
-  Zap
+  Zap,
+  BarChart3
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -18,6 +19,7 @@ const Sidebar = () => {
         { name: 'COMMAND', path: '/', icon: <Terminal size={20} /> },
         { name: 'INGESTION', path: '/upload', icon: <Cpu size={20} /> },
         { name: 'MONITOR', path: '/dashboard', icon: <Activity size={20} /> },
+        { name: 'COMPARISON', path: '/comparison', icon: <BarChart3 size={20} /> },
       ]
     },
     {
@@ -37,9 +39,15 @@ const Sidebar = () => {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-logo" style={{ marginBottom: '3rem' }}>
-        <h2 className="gradient-text" style={{ fontSize: '1.4rem', fontWeight: '800', letterSpacing: '0.15em' }}>SAMAAN_AI</h2>
-        <div style={{ height: '2px', width: '40px', background: 'var(--accent-primary)', marginTop: '0.6rem', boxShadow: '0 0 10px var(--accent-glow)' }}></div>
+      <div className="sidebar-logo" style={{ marginBottom: '3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="ai-pulse-container">
+          <div className="ai-pulse-ring"></div>
+          <div className="ai-pulse-dot"></div>
+        </div>
+        <div>
+          <h2 className="gradient-text" style={{ fontSize: '1.4rem', fontWeight: '800', letterSpacing: '0.15em', margin: 0 }}>SAMAAN_AI</h2>
+          <div style={{ height: '2px', width: '40px', background: 'var(--accent-primary)', marginTop: '0.3rem', boxShadow: '0 0 10px var(--accent-glow)' }}></div>
+        </div>
       </div>
 
       <nav className="sidebar-nav">

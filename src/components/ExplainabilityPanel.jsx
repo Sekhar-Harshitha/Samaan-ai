@@ -13,6 +13,20 @@ import {
     Cell
 } from 'recharts';
 
+const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+        const data = payload[0].payload;
+        return (
+            <div style={{ background: 'rgba(0,0,0,0.85)', border: '1px solid var(--border-color)', padding: '10px', borderRadius: '4px', fontFamily: 'JetBrains Mono', fontSize: '0.75rem' }}>
+                <p style={{ color: 'var(--text-primary)', marginBottom: '5px' }}>FEATURE: {label}</p>
+                <p style={{ color: 'var(--accent-primary)' }}>IMPORTANCE: {data.value.toFixed(4)}</p>
+                {data.isDriver && <p style={{ color: '#c026d3', marginTop: '5px' }}>⚠️ IDENTIFIED AS BIAS DRIVER</p>}
+            </div>
+        );
+    }
+    return null;
+};
+
 const ExplainabilityPanel = () => {
     const { explainResults, isExplainLoading, explainError } = useBias();
 
@@ -59,19 +73,6 @@ const ExplainabilityPanel = () => {
 
     const { bias_drivers, explanation } = explainResults;
 
-    const CustomTooltip = ({ active, payload, label }) => {
-        if (active && payload && payload.length) {
-            const data = payload[0].payload;
-            return (
-                <div style={{ background: 'rgba(0,0,0,0.85)', border: '1px solid var(--border-color)', padding: '10px', borderRadius: '4px', fontFamily: 'JetBrains Mono', fontSize: '0.75rem' }}>
-                    <p style={{ color: 'var(--text-primary)', marginBottom: '5px' }}>FEATURE: {label}</p>
-                    <p style={{ color: 'var(--accent-primary)' }}>IMPORTANCE: {data.value.toFixed(4)}</p>
-                    {data.isDriver && <p style={{ color: '#c026d3', marginTop: '5px' }}>⚠️ IDENTIFIED AS BIAS DRIVER</p>}
-                </div>
-            );
-        }
-        return null;
-    };
 
     return (
         <motion.div

@@ -6,3 +6,5 @@ scikit-learn
 fairlearn
 joblib
 numpy
+shap
+fpdf

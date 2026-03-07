@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck, Target, Scale, AlertTriangle, GitBranch, CheckCircle, Activity } from 'lucide-react';
+import { ShieldCheck, Target, Scale, Zap, CheckCircle, Activity } from 'lucide-react';
 import { useBias } from '../context/BiasContext';
 
 // ── Metric card template data (mock values used when no API results) ──────────
@@ -36,7 +36,7 @@ const METRIC_TEMPLATES = [
         mockScore: 61,
         unit: '%',
         explanation: 'Consistency in positive selection rates across attributes.',
-        icon: GitBranch,
+        icon: Zap,
         getScore: (results) =>
             results ? Math.round((1 - results.selection_rate_difference) * 100) : null,
         getStatus: (score) => score >= 85 ? 'NOMINAL' : score >= 70 ? 'WARNING' : 'CRITICAL',
@@ -48,7 +48,7 @@ const METRIC_TEMPLATES = [
         mockScore: 34,
         unit: '',
         explanation: 'Composite risk score derived from multi-axis bias analysis.',
-        icon: AlertTriangle,
+        icon: Target,
         getScore: (results) =>
             results
                 ? Math.round(
@@ -82,9 +82,15 @@ const STATUS_CONFIG = {
 // ── Animated counter ──────────────────────────────────────────────────────────
 const AnimatedScore = ({ target, unit, color, delay = 0 }) => {
     const [current, setCurrent] = useState(0);
+    const [prevTarget, setPrevTarget] = useState(target);
+
+    // Reset current when target changes using render-phase state update
+    if (target !== prevTarget) {
+        setPrevTarget(target);
+        setCurrent(0);
+    }
 
     useEffect(() => {
-        setCurrent(0);
         let startTime = null;
         const duration = 1400;
         let raf;
@@ -146,75 +152,78 @@ const MetricCard = ({ template, score, index }) => {
     const Icon = template.icon;
 
     return (
-        <motion.div
-            key={`${template.id}-${score}`}
-            initial={{ opacity: 0, y: 30, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.5, delay: index * 0.1, ease: 'easeOut' }}
-            whileHover={{ scale: 1.03, y: -4, transition: { duration: 0.2 } }}
-            style={{
-                background: 'rgba(5, 12, 25, 0.75)',
-                border: `1px solid ${cfg.border}`,
-                borderRadius: '14px', padding: '1.4rem 1.5rem',
-                backdropFilter: 'blur(16px)',
-                boxShadow: `0 0 24px ${cfg.glow}, inset 0 1px 0 rgba(255,255,255,0.06)`,
-                display: 'flex', flexDirection: 'column', gap: '0.75rem',
-                cursor: 'default', position: 'relative', overflow: 'hidden',
-            }}
-        >
-            {/* Top accent bar */}
-            <div style={{
-                position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
-                background: `linear-gradient(90deg, transparent, ${cfg.color}, transparent)`,
-                opacity: 0.8,
-            }} />
-
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                    <p style={{
-                        fontFamily: 'JetBrains Mono', fontSize: '0.6rem', letterSpacing: '0.12em',
-                        color: 'var(--text-secondary)', marginBottom: '0.3rem', opacity: 0.7,
-                    }}>{template.label}</p>
-                    <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#e2e8f0', lineHeight: 1.2 }}>
-                        {template.title}
-                    </p>
-                </div>
-                <div style={{
-                    width: '36px', height: '36px', borderRadius: '8px',
-                    background: 'rgba(5,12,25,0.9)',
+        <div className="metric-card-wrapper" style={{ flex: 1, display: 'flex' }}>
+            <div className="metric-tooltip">{template.explanation}</div>
+            <motion.div
+                key={`${template.id}-${score}`}
+                initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.5, delay: index * 0.1, ease: 'easeOut' }}
+                whileHover={{ scale: 1.03, y: -4, transition: { duration: 0.2 } }}
+                style={{
+                    background: 'rgba(5, 12, 25, 0.75)',
                     border: `1px solid ${cfg.border}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: `0 0 12px ${cfg.glow}`, flexShrink: 0,
-                }}>
-                    <Icon size={18} color={cfg.color} />
-                </div>
-            </div>
-
-            {/* Animated score */}
-            <AnimatedScore target={score} unit={template.unit} color={cfg.color} delay={index * 0.1 + 0.2} />
-
-            {/* Explanation */}
-            <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.5, opacity: 0.75 }}>
-                {template.explanation}
-            </p>
-
-            {/* Status badge */}
-            <div style={{
-                display: 'inline-flex', alignItems: 'center', gap: '0.4rem', alignSelf: 'flex-start',
-                padding: '0.3rem 0.75rem', borderRadius: '999px',
-                background: cfg.glow, border: `1px solid ${cfg.border}`,
-            }}>
+                    borderRadius: '14px', padding: '1.4rem 1.5rem',
+                    backdropFilter: 'blur(16px)',
+                    boxShadow: `0 0 24px ${cfg.glow}, inset 0 1px 0 rgba(255,255,255,0.06)`,
+                    display: 'flex', flexDirection: 'column', gap: '0.75rem',
+                    cursor: 'default', position: 'relative', overflow: 'hidden',
+                }}
+            >
+                {/* Top accent bar */}
                 <div style={{
-                    width: '6px', height: '6px', borderRadius: '50%',
-                    background: cfg.color, boxShadow: `0 0 6px ${cfg.color}`,
+                    position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
+                    background: `linear-gradient(90deg, transparent, ${cfg.color}, transparent)`,
+                    opacity: 0.8,
                 }} />
-                <span style={{
-                    fontFamily: 'JetBrains Mono', fontSize: '0.6rem',
-                    color: cfg.color, fontWeight: 700, letterSpacing: '0.1em',
-                }}>{status}</span>
-            </div>
-        </motion.div>
+
+                {/* Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                        <p style={{
+                            fontFamily: 'JetBrains Mono', fontSize: '0.6rem', letterSpacing: '0.12em',
+                            color: 'var(--text-secondary)', marginBottom: '0.3rem', opacity: 0.7,
+                        }}>{template.label}</p>
+                        <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#e2e8f0', lineHeight: 1.2 }}>
+                            {template.title}
+                        </p>
+                    </div>
+                    <div style={{
+                        width: '36px', height: '36px', borderRadius: '8px',
+                        background: 'rgba(5,12,25,0.9)',
+                        border: `1px solid ${cfg.border}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: `0 0 12px ${cfg.glow}`, flexShrink: 0,
+                    }}>
+                        <Icon size={18} color={cfg.color} />
+                    </div>
+                </div>
+
+                {/* Animated score */}
+                <AnimatedScore target={score} unit={template.unit} color={cfg.color} delay={index * 0.1 + 0.2} />
+
+                {/* Explanation */}
+                <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.5, opacity: 0.75 }}>
+                    {template.explanation}
+                </p>
+
+                {/* Status badge */}
+                <div style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.4rem', alignSelf: 'flex-start',
+                    padding: '0.3rem 0.75rem', borderRadius: '999px',
+                    background: cfg.glow, border: `1px solid ${cfg.border}`,
+                }}>
+                    <div style={{
+                        width: '6px', height: '6px', borderRadius: '50%',
+                        background: cfg.color, boxShadow: `0 0 6px ${cfg.color}`,
+                    }} />
+                    <span style={{
+                        fontFamily: 'JetBrains Mono', fontSize: '0.6rem',
+                        color: cfg.color, fontWeight: 700, letterSpacing: '0.1em',
+                    }}>{status}</span>
+                </div>
+            </motion.div>
+        </div>
     );
 };
 

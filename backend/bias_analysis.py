@@ -13,6 +13,7 @@ from fairlearn.metrics import (
     false_positive_rate_difference,
     false_negative_rate_difference,
 )
+from compliance import evaluate_compliance
 
 
 def compute_metrics(
@@ -158,8 +159,22 @@ def compute_metrics(
         )
     )
 
-    return {
+    # ── Risk Scoring ──────────────────────────────────────────────────────────
+    risk_score = (abs(dpd) + abs(eod)) / 2
+    fairness_score = round(100 * (1.0 - risk_score), 1)
+    
+    if risk_score <= 0.05:
+        bias_risk = "LOW"
+    elif risk_score <= 0.15:
+        bias_risk = "MEDIUM"
+    else:
+        bias_risk = "HIGH"
+
+    results = {
         "accuracy": round(accuracy, 4),
+        "fairness_score": fairness_score,
+        "risk_score": round(risk_score, 4),
+        "bias_risk": bias_risk,
         "demographic_parity_ratio": round(1.0 - abs(dpd), 4),
         "demographic_parity_difference": round(abs(dpd), 4),
         "equal_opportunity_difference": round(abs(eod), 4),
@@ -169,3 +184,9 @@ def compute_metrics(
         "sensitive_attribute": sensitive_col,
         "target_variable": target_col
     }
+
+    # ── Compliance Check ──────────────────────────────────────────────────────
+    compliance = evaluate_compliance(results, X_data, model)
+    results["compliance"] = compliance
+
+    return results

@@ -152,9 +152,29 @@ const MitigationSimulator = () => {
                         <ShieldCheck /> MITIGATION_RESULTS
                     </h3>
 
-                    <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.4)', borderRadius: '4px', marginBottom: '2rem', borderLeft: '4px solid var(--accent-primary)' }}>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono' }}>APPLIED_STRATEGY: </span>
-                        <span style={{ color: 'var(--text-primary)', fontWeight: 'bold' }}>{results.recommended_strategy}</span>
+                    <div style={{
+                        padding: '1.5rem',
+                        background: 'rgba(34, 211, 238, 0.05)',
+                        borderRadius: '8px',
+                        marginBottom: '2rem',
+                        border: '1px solid var(--accent-primary)',
+                        boxShadow: '0 0 20px rgba(34, 211, 238, 0.15)',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '12px'
+                    }}>
+                        <div className="ai-pulse-container" style={{ marginTop: '4px' }}>
+                            <div className="ai-pulse-ring"></div>
+                            <div className="ai-pulse-dot"></div>
+                        </div>
+                        <div>
+                            <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--accent-primary)', fontFamily: 'JetBrains Mono', letterSpacing: '0.1em', marginBottom: '0.3rem' }}>
+                                AI_RECOMMENDATION_SYSTEM
+                            </span>
+                            <span style={{ color: 'var(--text-primary)', fontSize: '0.95rem', lineHeight: '1.5' }}>
+                                {results.recommended_strategy}
+                            </span>
+                        </div>
                     </div>
 
                     <div style={{ height: '350px', width: '100%' }}>

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import axios from 'axios';
 
@@ -26,6 +27,9 @@ export const BiasProvider = ({ children }) => {
     const [explainResults, setExplainResults] = useState(null);
     const [isExplainLoading, setIsExplainLoading] = useState(false);
     const [explainError, setExplainError] = useState(null);
+    const [datasetAuditResult, setDatasetAuditResult] = useState(null);
+    const [isDatasetLoading, setIsDatasetLoading] = useState(false);
+    const [datasetError, setDatasetError] = useState(null);
 
     const runAnalysis = useCallback(async (formData) => {
         setIsLoading(true);
@@ -90,6 +94,24 @@ export const BiasProvider = ({ children }) => {
         }
     }, []);
 
+    const runDatasetAudit = useCallback(async (formData) => {
+        setIsDatasetLoading(true);
+        setDatasetError(null);
+        setDatasetAuditResult(null);
+
+        try {
+            const response = await axios.post('http://localhost:8000/dataset_audit', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            setDatasetAuditResult(response.data);
+        } catch (err) {
+            const detail = err.response?.data?.detail || err.message || 'Dataset audit failed.';
+            setDatasetError(detail);
+        } finally {
+            setIsDatasetLoading(false);
+        }
+    }, []);
+
     const clearResults = useCallback(() => {
         setResults(null);
         setMetadata(null);
@@ -98,13 +120,17 @@ export const BiasProvider = ({ children }) => {
         setExplainResults(null);
         setExplainError(null);
         setIsExplainLoading(false);
+        setDatasetAuditResult(null);
+        setDatasetError(null);
+        setIsDatasetLoading(false);
     }, []);
 
     return (
         <BiasContext.Provider value={{
             results, metadata, isLoading, error,
             explainResults, isExplainLoading, explainError,
-            runAnalysis, clearResults
+            datasetAuditResult, isDatasetLoading, datasetError,
+            runAnalysis, clearResults, runDatasetAudit
         }}>
             {children}
         </BiasContext.Provider>

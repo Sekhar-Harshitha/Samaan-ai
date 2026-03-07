@@ -12,13 +12,15 @@ import shutil
 
 import joblib
 import pandas as pd
+from typing import List
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from bias_analysis import compute_metrics
 from explain import compute_explanation
 from mitigation import compute_mitigation
-from report import generate_audit_report
+from report import generate_audit_report, AuditReportPDF
+from dataset_scanner import audit_dataset
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -37,6 +39,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+class ReportData(BaseModel):
+    model_summary: str
+    dataset_description: str
+    bias_findings: str
+    affected_groups: str
+    bias_drivers: List[str] = []
+    fairness_metrics: dict
+    mitigation_results: str
+    compliance_status: dict = {}
+    final_fairness_score: float
+
+# Global store for latest analysis (demo purposes)
+latest_analysis_store = {
+    "metrics": None,
+    "explanation": None,
+    "compliance": None,
+    "dataset_audit": None
+}
 
 @app.get("/health")
 def health_check():
@@ -111,10 +132,75 @@ async def analyze(
                 detail=f"Bias analysis failed: {str(e)}",
             )
 
+        # Store results for report generation
+        latest_analysis_store["metrics"] = results
+        latest_analysis_store["compliance"] = results.get("compliance")
+
         return results
 
     finally:
         # Clean up temp files regardless of outcome
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@app.post("/compare_models")
+async def compare_models(
+    model_files: List[UploadFile] = File(..., description="Multiple serialized scikit-learn models (.pkl)"),
+    dataset_file: UploadFile = File(..., description="Dataset with features + target (.csv)"),
+    sensitive_col: str = Form("gender", description="Column name of the sensitive/protected attribute"),
+    target_col: str = Form("income", description="Column name of the binary target variable"),
+):
+    """
+    Compare multiple models on the same dataset.
+    """
+    if not dataset_file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Dataset must be .csv")
+    
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        dataset_path = os.path.join(tmp_dir, "dataset.csv")
+        with open(dataset_path, "wb") as f:
+            shutil.copyfileobj(dataset_file.file, f)
+        
+        try:
+            df = pd.read_csv(dataset_path)
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Failed to parse CSV: {str(e)}")
+
+        comparison_results = []
+
+        for model_file in model_files:
+            if not model_file.filename.endswith(".pkl"):
+                continue
+            
+            model_path = os.path.join(tmp_dir, model_file.filename)
+            with open(model_path, "wb") as f:
+                shutil.copyfileobj(model_file.file, f)
+            
+            try:
+                model = joblib.load(model_path)
+                metrics = compute_metrics(
+                    model=model,
+                    df=df,
+                    target_col=target_col,
+                    sensitive_col=sensitive_col,
+                )
+                comparison_results.append({
+                    "model": model_file.filename.replace(".pkl", ""),
+                    "accuracy": metrics["accuracy"],
+                    "dp_diff": metrics["demographic_parity_difference"],
+                    "eo_diff": metrics["equal_opportunity_difference"],
+                    "risk_score": metrics["risk_score"],
+                    "bias_risk": metrics["bias_risk"],
+                    "fairness_score": metrics["fairness_score"]
+                })
+            except Exception as e:
+                print(f"Failed to process {model_file.filename}: {str(e)}")
+                continue
+
+        return {"models": comparison_results}
+
+    finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
@@ -159,6 +245,8 @@ async def explain(
                 target_col=target_col,
                 sensitive_col=sensitive_col,
             )
+            # Store explanation for report generation
+            latest_analysis_store["explanation"] = results
             return results
         except Exception as e:
             return {
@@ -220,14 +308,31 @@ async def mitigate(
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-class ReportData(BaseModel):
-    model_summary: str
-    dataset_description: str
-    bias_findings: str
-    affected_groups: str
-    fairness_metrics: dict
-    mitigation_results: str
-    final_fairness_score: float
+@app.post("/dataset_audit")
+async def dataset_audit(
+    dataset_file: UploadFile = File(..., description="Dataset CSV to scan for bias"),
+):
+    """
+    Scans the uploaded dataset for categorical distribution imbalances.
+    """
+    if not dataset_file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Dataset must be .csv")
+
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        dataset_path = os.path.join(tmp_dir, "audit_dataset.csv")
+        with open(dataset_path, "wb") as f:
+            shutil.copyfileobj(dataset_file.file, f)
+
+        df = pd.read_csv(dataset_path)
+        results = audit_dataset(df)
+        latest_analysis_store["dataset_audit"] = results
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Dataset audit failed: {str(e)}")
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
 
 
 @app.post("/report")
@@ -245,3 +350,48 @@ async def create_report(data: ReportData):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
+
+
+@app.get("/generate_audit_report")
+async def generate_audit_report_auto():
+    """
+    Generate the official AI Fairness Audit Report based on latest findings.
+    """
+    if not latest_analysis_store["metrics"]:
+        raise HTTPException(status_code=400, detail="No analysis data available. Please run an analysis first.")
+    
+    metrics = latest_analysis_store["metrics"]
+    explanation = latest_analysis_store["explanation"] or {"bias_drivers": [], "explanation": "Not analyzed"}
+    compliance = latest_analysis_store["compliance"] or {}
+    dataset_audit = latest_analysis_store["dataset_audit"] or {}
+
+    # Extract dataset summary from audit if available
+    dataset_desc = "Analysis performed on the provided CSV dataset."
+    if dataset_audit:
+        dataset_desc = f"Analyzed {dataset_audit.get('total_rows', 0)} records. "
+        dataset_desc += f"Detected {len(dataset_audit.get('dataset_bias', {}))} sensitive attributes."
+
+    report_payload = {
+        "model_summary": "SamaanAI Automated Analysis of the uploaded model.",
+        "dataset_description": dataset_desc,
+        "fairness_metrics": {
+            "accuracy": metrics.get("accuracy", 0),
+            "dpd": metrics.get("demographic_parity_difference", 0),
+            "eod": metrics.get("equal_opportunity_difference", 0)
+        },
+        "bias_drivers": explanation.get("bias_drivers", []),
+        "mitigation_results": "Baseline analysis performed on the primary model state.",
+        "risk_classification": metrics.get("bias_risk", "LOW"),
+        "compliance_status": compliance,
+        "final_fairness_score": metrics.get("fairness_score", 0)
+    }
+
+    try:
+        pdf_path = generate_audit_report(report_payload)
+        return FileResponse(
+            path=pdf_path,
+            filename="SamaanAI_Fairness_Audit_Report.pdf",
+            media_type="application/pdf"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate audit report: {str(e)}")

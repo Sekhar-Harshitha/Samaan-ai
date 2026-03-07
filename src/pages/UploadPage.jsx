@@ -2,10 +2,12 @@ import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../components/PageWrapper';
-import { Binary, Cpu, Play, Loader2, AlertTriangle, CheckCircle, ChevronRight, X } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle, ChevronRight, Binary, Cpu, Play } from 'lucide-react';
 import { useBias } from '../context/BiasContext';
+import LiveAnalysisOverlay from '../components/LiveAnalysisOverlay';
 
 // ── Drag-and-drop / click file zone ─────────────────────────────────────────
+// eslint-disable-next-line no-unused-vars
 const FileDropZone = ({ label, sublabel, accept, icon: Icon, accentColor, file, onFile, id }) => {
     const inputRef = useRef(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -124,12 +126,13 @@ const FieldInput = ({ label, sublabel, value, onChange, placeholder }) => (
 // ── Main page ─────────────────────────────────────────────────────────────────
 const UploadPage = () => {
     const navigate = useNavigate();
-    const { runAnalysis, isLoading, error } = useBias();
+    const { runAnalysis, runDatasetAudit, isLoading, error } = useBias();
 
     const [modelFile, setModelFile] = useState(null);
     const [datasetFile, setDatasetFile] = useState(null);
     const [sensitiveCol, setSensitiveCol] = useState('gender');
     const [targetCol, setTargetCol] = useState('income');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     const canRun = modelFile && datasetFile && !isLoading;
 
@@ -142,13 +145,29 @@ const UploadPage = () => {
         formData.append('sensitive_col', sensitiveCol.trim() || 'gender');
         formData.append('target_col', targetCol.trim() || 'income');
 
-        await runAnalysis(formData);
-        // Navigate to dashboard regardless — dashboard shows results or error
-        navigate('/dashboard');
+        setIsAnalyzing(true);
+        try {
+            const auditFormData = new FormData();
+            auditFormData.append('dataset_file', datasetFile);
+
+            // Run analysis and dataset audit concurrently
+            await Promise.all([
+                runAnalysis(formData),
+                runDatasetAudit(auditFormData)
+            ]);
+        } catch {
+            setIsAnalyzing(false);
+        }
     };
 
     return (
         <PageWrapper>
+            <AnimatePresence>
+                {isAnalyzing && (
+                    <LiveAnalysisOverlay onComplete={() => navigate('/dashboard')} />
+                )}
+            </AnimatePresence>
+
             {/* Header */}
             <div style={{ marginBottom: '3rem' }}>
                 <motion.div

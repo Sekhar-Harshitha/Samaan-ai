@@ -7,6 +7,7 @@ import UploadPage from './pages/UploadPage';
 import DashboardPage from './pages/DashboardPage';
 import RemediationPage from './pages/RemediationPage';
 import ReportPage from './pages/ReportPage';
+import ModelComparisonDashboard from './pages/ModelComparisonDashboard';
 import NeuralBackground from './components/NeuralBackground';
 import { BiasProvider } from './context/BiasContext';
 import './index.css';
@@ -22,6 +23,7 @@ const AnimatedRoutes = () => {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/remediation" element={<RemediationPage />} />
         <Route path="/report" element={<ReportPage />} />
+        <Route path="/comparison" element={<ModelComparisonDashboard />} />
       </Routes>
     </AnimatePresence>
   );

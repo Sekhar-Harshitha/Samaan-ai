@@ -13,6 +13,10 @@ const ReportPage = () => {
         bias_findings: 'Detected a selection rate disparity historically favoring the privileged demographic.',
         affected_groups: 'Female individuals exhibited a False Negative Rate 12% higher than Male counterparts.',
         mitigation_results: 'Applied Fairlearn ExponentiatedGradient which reduced Demographic Parity Difference by 85%.',
+        bias_drivers: 'age, education-num',
+        compliance_fairness: 'PASS',
+        compliance_dataset: 'WARNING',
+        compliance_transparency: 'PASS',
         final_fairness_score: '0.96',
         acc: '0.84',
         dpd: '0.04',
@@ -32,7 +36,13 @@ const ReportPage = () => {
             dataset_description: formData.dataset_description,
             bias_findings: formData.bias_findings,
             affected_groups: formData.affected_groups,
+            bias_drivers: formData.bias_drivers.split(',').map(s => s.trim()),
             mitigation_results: formData.mitigation_results,
+            compliance_status: {
+                fairness_compliance: formData.compliance_fairness,
+                dataset_balance: formData.compliance_dataset,
+                model_transparency: formData.compliance_transparency
+            },
             final_fairness_score: parseFloat(formData.final_fairness_score) || 0,
             fairness_metrics: {
                 accuracy: parseFloat(formData.acc) || 0,
@@ -161,8 +171,61 @@ const ReportPage = () => {
                             name="mitigation_results"
                             value={formData.mitigation_results}
                             onChange={handleChange}
-                            style={{ width: '100%', padding: '1rem', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--accent-primary)', color: 'var(--text-primary)', minHeight: '60px' }}
+                            style={{ width: '100%', padding: '1rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)', minHeight: '60px' }}
                         />
+                    </div>
+
+                    <div>
+                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>BIAS DRIVERS (comma separated)</label>
+                        <input
+                            type="text"
+                            name="bias_drivers"
+                            value={formData.bias_drivers}
+                            onChange={handleChange}
+                            style={{ width: '100%', padding: '0.8rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)' }}
+                        />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>FAIRNESS COMPLIANCE</label>
+                            <select
+                                name="compliance_fairness"
+                                value={formData.compliance_fairness}
+                                onChange={handleChange}
+                                style={{ width: '100%', padding: '0.8rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)' }}
+                            >
+                                <option value="PASS">PASS</option>
+                                <option value="WARNING">WARNING</option>
+                                <option value="FAIL">FAIL</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>DATASET BALANCE</label>
+                            <select
+                                name="compliance_dataset"
+                                value={formData.compliance_dataset}
+                                onChange={handleChange}
+                                style={{ width: '100%', padding: '0.8rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)' }}
+                            >
+                                <option value="PASS">PASS</option>
+                                <option value="WARNING">WARNING</option>
+                                <option value="FAIL">FAIL</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>TRANSPARENCY INDEX</label>
+                            <select
+                                name="compliance_transparency"
+                                value={formData.compliance_transparency}
+                                onChange={handleChange}
+                                style={{ width: '100%', padding: '0.8rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)' }}
+                            >
+                                <option value="PASS">PASS</option>
+                                <option value="WARNING">WARNING</option>
+                                <option value="FAIL">FAIL</option>
+                            </select>
+                        </div>
                     </div>
                     <div>
                         <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>FINAL FAIRNESS SCORE</label>

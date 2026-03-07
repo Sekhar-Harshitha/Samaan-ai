@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 
 const AIJusticeScale = ({ size = 500 }) => {
@@ -10,6 +10,17 @@ const AIJusticeScale = ({ size = 500 }) => {
 
     // Bias tilt angle (positive for right-heavy, negative for left-heavy)
     const tiltAngle = 8;
+
+    const [particles] = useState(() =>
+        [...Array(15)].map((_, i) => ({
+            id: i,
+            r: Math.random() * 1.5,
+            opacity: Math.random(),
+            cx: Math.random() * size,
+            cy: Math.random() * size,
+            duration: 3 + Math.random() * 5,
+            delay: Math.random() * 5
+        })));
 
     return (
         <div style={{ position: 'relative', width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -139,24 +150,24 @@ const AIJusticeScale = ({ size = 500 }) => {
                 </motion.g>
 
                 {/* Particle Field */}
-                {[...Array(15)].map((_, i) => (
+                {particles.map((p) => (
                     <motion.circle
-                        key={`p-${i}`}
-                        r={Math.random() * 1.5}
+                        key={`p-${p.id}`}
+                        r={p.r}
                         fill="var(--accent-primary)"
-                        opacity={Math.random()}
+                        opacity={p.opacity}
                         initial={{
-                            cx: Math.random() * size,
-                            cy: Math.random() * size
+                            cx: p.cx,
+                            cy: p.cy
                         }}
                         animate={{
                             y: [0, -50],
                             opacity: [0, 1, 0]
                         }}
                         transition={{
-                            duration: 3 + Math.random() * 5,
+                            duration: p.duration,
                             repeat: Infinity,
-                            delay: Math.random() * 5
+                            delay: p.delay
                         }}
                     />
                 ))}
