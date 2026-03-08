@@ -9,7 +9,7 @@ import RemediationPage from './pages/RemediationPage';
 import ReportPage from './pages/ReportPage';
 import ModelComparisonDashboard from './pages/ModelComparisonDashboard';
 import NeuralBackground from './components/NeuralBackground';
-import { BiasProvider } from './context/BiasContext';
+import { BiasProvider } from './context/BiasState';
 import './index.css';
 
 class GlobalErrorBoundary extends React.Component {

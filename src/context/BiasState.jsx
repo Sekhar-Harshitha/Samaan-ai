@@ -1,11 +1,11 @@
-// BiasContext.jsx — global state for bias analysis results
+// BiasState.jsx — global state for bias analysis results
 // eslint-disable-next-line react-refresh/only-export-components
 import { createContext, useContext, useState, useCallback } from 'react';
 import axios from 'axios';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-const BiasContext = createContext(null);
+const BiasState = createContext(null);
 
 export function BiasProvider({ children }) {
     const [results, setResults] = useState(null);
@@ -88,6 +88,7 @@ export function BiasProvider({ children }) {
 
     // ── runAnalysis ─────────────────────────────────────────────────────────
     const runAnalysis = useCallback(async (formData) => {
+        console.log("CACHE_BREAKER: runAnalysis started v3");
         setIsLoading(true);
         setIsExplainLoading(true);
         setError(null);
@@ -102,6 +103,7 @@ export function BiasProvider({ children }) {
             target_col: formData.get('target_col'),
         });
 
+
         try {
             const config = { timeout: 60_000 }; // 60s for initial upload
 
@@ -111,7 +113,6 @@ export function BiasProvider({ children }) {
             ]);
 
             if (analyzeRes.status === 'fulfilled' && analyzeRes.value.data?.task_id) {
-                analyzeOk = true;
                 const jobId = analyzeRes.value.data.task_id;
                 setAnalysisMessage('Analysis queued. Computing fairness metrics...');
                 setProgress(10);
@@ -161,8 +162,9 @@ export function BiasProvider({ children }) {
                 const detail = explainRes.reason?.response?.data?.detail || explainRes.reason?.message || 'Failed to initiate explainability.';
                 setExplainError(detail);
                 setIsExplainLoading(false);
-                // If analyze also failed, bubble up a user-friendly error
-                if (!analyzeOk) {
+                // Only set a generic error if we don't already have one
+                if (analyzeRes.status !== 'fulfilled' &&
+                    analyzeRes.reason?.code === 'ERR_NETWORK') {
                     setError('Backend unreachable. Please ensure the backend is running: uvicorn main:app --reload --port 8000');
                 }
             }
@@ -221,7 +223,7 @@ export function BiasProvider({ children }) {
     }, []);
 
     return (
-        <BiasContext.Provider value={{
+        <BiasState.Provider value={{
             results, metadata, isLoading, error,
             explainResults, isExplainLoading, explainError,
             datasetAuditResult, isDatasetLoading, datasetError,
@@ -229,13 +231,13 @@ export function BiasProvider({ children }) {
             runAnalysis, clearResults, runDatasetAudit, generateCertificate,
         }}>
             {children}
-        </BiasContext.Provider>
+        </BiasState.Provider>
     );
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function useBias() {
-    const ctx = useContext(BiasContext);
+    const ctx = useContext(BiasState);
     if (!ctx) throw new Error('useBias must be used inside <BiasProvider>');
     return ctx;
 }

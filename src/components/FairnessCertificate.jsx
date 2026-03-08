@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Download, ShieldCheck, Award, CheckCircle } from 'lucide-react';
-import { useBias } from '../context/BiasContext';
+import { useBias } from '../context/BiasState';
 
 const FairnessCertificate = ({ modelName = "Credit_Risk_Model_v4", date = new Date().toLocaleDateString() }) => {
     const { generateCertificate } = useBias();

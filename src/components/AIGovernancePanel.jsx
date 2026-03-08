@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Shield, CheckCircle2, AlertTriangle, XCircle, Database, Eye, Zap } from 'lucide-react';
-import { useBias } from '../context/BiasContext';
+import { useBias } from '../context/BiasState';
 
 // eslint-disable-next-line no-unused-vars
 const ComplianceItem = ({ label, status, icon: IconComponent, description }) => {

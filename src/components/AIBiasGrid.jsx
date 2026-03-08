@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheck, Target, Scale, Zap, CheckCircle, Activity } from 'lucide-react';
-import { useBias } from '../context/BiasContext';
+import { useBias } from '../context/BiasState';
 
 // ── Metric card template data (mock values used when no API results) ──────────
 const METRIC_TEMPLATES = [

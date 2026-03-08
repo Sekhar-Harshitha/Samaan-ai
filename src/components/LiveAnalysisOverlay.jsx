@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Activity, X, ArrowLeft } from 'lucide-react';
-import { useBias } from '../context/BiasContext';
+import { useBias } from '../context/BiasState';
 
 const LiveAnalysisOverlay = ({ onComplete, onCancel }) => {
     const { progress, isLargeDataset, results, error, analysisMessage } = useBias();

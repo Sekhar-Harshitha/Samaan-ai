@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../components/PageWrapper';
 import { Loader2, AlertTriangle, CheckCircle, ChevronRight, Binary, Cpu, Play, X } from 'lucide-react';
-import { useBias } from '../context/BiasContext';
+import { useBias } from '../context/BiasState';
 import LiveAnalysisOverlay from '../components/LiveAnalysisOverlay';
 
 // ── Drag-and-drop / click file zone ─────────────────────────────────────────
@@ -136,7 +136,7 @@ const UploadPage = () => {
 
     const canRun = modelFile && datasetFile && !isLoading;
 
-    const handleRun = async () => {
+    const runBiasAnalysis = async () => {
         if (!canRun) return;
         setLocalError(null);
         clearResults();
@@ -286,7 +286,7 @@ const UploadPage = () => {
             {/* Run Button */}
             <motion.button
                 className="btn-command"
-                onClick={handleRun}
+                onClick={runBiasAnalysis}
                 disabled={!canRun}
                 whileHover={canRun ? { scale: 1.02 } : {}}
                 whileTap={canRun ? { scale: 0.98 } : {}}

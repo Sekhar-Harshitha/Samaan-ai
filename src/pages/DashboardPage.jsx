@@ -16,7 +16,7 @@ import HolographicInsights from '../components/HolographicInsights';
 import AIRiskMonitor from '../components/AIRiskMonitor';
 import AIGovernancePanel from '../components/AIGovernancePanel';
 import { useNavigate } from 'react-router-dom';
-import { useBias } from '../context/BiasContext';
+import { useBias } from '../context/BiasState';
 
 const DashboardPage = () => {
     const navigate = useNavigate();

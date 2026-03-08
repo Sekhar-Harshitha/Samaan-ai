@@ -1,4 +1,4 @@
-import { useBias } from '../context/BiasContext';
+import { useBias } from '../context/BiasState';
 import { motion } from 'framer-motion';
 
 const FairnessRadar = ({ size = 550 }) => {
