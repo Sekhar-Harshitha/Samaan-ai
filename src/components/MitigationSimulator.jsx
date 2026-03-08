@@ -47,7 +47,8 @@ const MitigationSimulator = () => {
 
         try {
             console.log(`[API_REQUEST] POST /mitigate // Technique: ${technique}`);
-            const response = await fetch('http://localhost:8000/mitigate', {
+            const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const response = await fetch(`${API}/mitigate`, {
                 method: 'POST',
                 body: formData,
             });

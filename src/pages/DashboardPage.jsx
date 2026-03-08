@@ -32,7 +32,8 @@ const DashboardPage = () => {
     const handleGenerateReport = async () => {
         setReportLoading(true);
         try {
-            const response = await axios.get('http://localhost:8000/audit-report', {
+            const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const response = await axios.get(`${API}/audit-report`, {
                 responseType: 'blob'
             });
             const url = window.URL.createObjectURL(new Blob([response.data]));

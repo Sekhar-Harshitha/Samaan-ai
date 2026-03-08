@@ -52,7 +52,8 @@ const ReportPage = () => {
         };
 
         try {
-            const response = await fetch('http://localhost:8000/report', {
+            const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const response = await fetch(`${API}/report`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

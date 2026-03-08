@@ -42,7 +42,8 @@ const ModelComparisonDashboard = () => {
 
         try {
             console.log("DEBUG: Executing comparison for", modelFiles.length, "models");
-            const response = await axios.post('http://localhost:8000/compare_models', formData);
+            const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const response = await axios.post(`${API}/compare_models`, formData);
             console.log("DEBUG: Comparison Response:", response.data);
             setComparisonData(response.data.models);
         } catch (err) {
