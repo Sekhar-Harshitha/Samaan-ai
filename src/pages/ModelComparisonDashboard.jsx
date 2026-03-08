@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, BarChart, HardDrive, FileText, CheckCircle, AlertTriangle, Trophy, Plus, X, Loader2 } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE_URL as API } from '../lib/api';
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import PageWrapper from '../components/PageWrapper';
 
@@ -42,7 +43,6 @@ const ModelComparisonDashboard = () => {
 
         try {
             console.log("DEBUG: Executing comparison for", modelFiles.length, "models");
-            const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
             const response = await axios.post(`${API}/compare_models`, formData);
             console.log("DEBUG: Comparison Response:", response.data);
             setComparisonData(response.data.models);

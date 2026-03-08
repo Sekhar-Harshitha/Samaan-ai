@@ -2,8 +2,7 @@
 // eslint-disable-next-line react-refresh/only-export-components
 import { createContext, useContext, useState, useCallback } from 'react';
 import axios from 'axios';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_BASE_URL as API } from '../lib/api';
 
 const BiasState = createContext(null);
 

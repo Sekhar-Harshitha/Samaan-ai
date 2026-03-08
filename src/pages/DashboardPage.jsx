@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_BASE_URL as API } from '../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageWrapper from '../components/PageWrapper';
 import { Activity, ShieldAlert, Crosshair, BarChart3, ArrowRight, ArrowLeft, CheckCircle, RotateCcw, Loader2 } from 'lucide-react';
@@ -32,7 +33,6 @@ const DashboardPage = () => {
     const handleGenerateReport = async () => {
         setReportLoading(true);
         try {
-            const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
             const response = await axios.get(`${API}/audit-report`, {
                 responseType: 'blob'
             });

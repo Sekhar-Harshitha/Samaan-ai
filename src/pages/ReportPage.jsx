@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import PageWrapper from '../components/PageWrapper';
 import { FileCode, Download, Database, Activity, FileText } from 'lucide-react';
+import { API_BASE_URL as API } from '../lib/api';
 
 const ReportPage = () => {
     const [loading, setLoading] = useState(false);
@@ -52,7 +53,6 @@ const ReportPage = () => {
         };
 
         try {
-            const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
             const response = await fetch(`${API}/report`, {
                 method: 'POST',
                 headers: {
