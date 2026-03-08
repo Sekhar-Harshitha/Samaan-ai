@@ -2,6 +2,11 @@ import pandas as pd
 import numpy as np
 import shap
 
+import time
+import logging
+
+logger = logging.getLogger("SamaanAI.Explain")
+
 def compute_explanation(
     model,
     df: pd.DataFrame,
@@ -23,7 +28,8 @@ def compute_explanation(
         "capital.gain": "capital-gain",
         "capital.loss": "capital-loss",
         "marital.status": "marital-status",
-        "native.country": "native-country"
+        "native.country": "native-country",
+        "sex": "gender"
     }
     df = df.rename(columns=mapping)
 
@@ -51,7 +57,12 @@ def compute_explanation(
             X_encoded[col] = pd.Categorical(X_encoded[col]).codes
     
     # Use a sample for SHAP calculation for efficiency
-    sample_size = min(len(X_encoded), 200)
+    # Optimization for large datasets
+    if len(X_encoded) > 50000:
+        sample_size = 50
+    else:
+        sample_size = min(len(X_encoded), 100)
+    
     X_sample = X_encoded.sample(n=sample_size, random_state=42)
 
     # 3. Compute SHAP Values

@@ -90,5 +90,70 @@ def generate_audit_report(data: dict) -> str:
     temp_dir = tempfile.gettempdir()
     filepath = os.path.join(temp_dir, f"SamaanAI_Audit_Report_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.pdf")
     pdf.output(filepath, 'F')
+    return filepath
+
+def generate_certificate_pdf(data: dict) -> str:
+    """
+    Generate a Samaan AI Fairness Compliance Certificate.
+    """
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Border
+    pdf.rect(5, 5, 200, 287)
+    pdf.rect(8, 8, 194, 281)
+
+    # Header
+    pdf.set_font('Arial', 'B', 24)
+    pdf.set_text_color(22, 163, 174) # Cyan-ish
+    pdf.cell(0, 30, 'Samaan AI Fairness Compliance Certificate', ln=True, align='C')
+    
+    pdf.set_font('Arial', 'B', 16)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 10, 'AI Governance Certification Report', ln=True, align='C')
+    pdf.ln(15)
+
+    # Body
+    pdf.set_font('Arial', '', 12)
+    pdf.set_text_color(0, 0, 0)
+    
+    fields = [
+        ("Model Fairness Score", f"{data.get('fairness_score', 'N/A')}%"),
+        ("Bias Risk Level", data.get('bias_risk', 'N/A')),
+        ("Dataset Compliance", data.get('dataset_bias', 'N/A')),
+        ("Transparency Status", data.get('transparency', 'N/A')),
+        ("Mitigation Status", data.get('mitigation', 'N/A')),
+        ("Regulatory Alignment", data.get('eu_alignment', 'N/A'))
+    ]
+
+    for label, value in fields:
+        pdf.set_font('Arial', 'B', 12)
+        pdf.cell(60, 12, f"{label}:", border='B')
+        pdf.set_font('Arial', '', 12)
+        pdf.cell(0, 12, f" {value}", ln=True, border='B')
+        pdf.ln(5)
+
+    pdf.ln(20)
+    
+    # Signature/Footer
+    pdf.set_font('Arial', 'I', 10)
+    pdf.cell(0, 10, "This certificate confirms that the analyzed model has been evaluated", ln=True, align='C')
+    pdf.cell(0, 10, "using the Samaan AI Bias Lab governance protocols.", ln=True, align='C')
+    
+    pdf.ln(30)
+    pdf.set_font('Arial', 'B', 10)
+    pdf.cell(0, 10, "Certified by Samaan AI Governance Engine", ln=True, align='C')
+    
+    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    pdf.cell(0, 8, f"Timestamp: {current_time}", ln=True, align='C')
+    
+    import os
+    cert_id = f"CERT-{datetime.datetime.now().strftime('%Y%m%d')}-{os.urandom(4).hex().upper()}"
+    pdf.cell(0, 8, f"Unique Certificate ID: {cert_id}", ln=True, align='C')
+
+    temp_dir = tempfile.gettempdir()
+    filename = f"certificate_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
+    filepath = os.path.join(temp_dir, filename)
+    pdf.output(filepath, 'F')
     
     return filepath

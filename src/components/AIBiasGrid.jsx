@@ -229,7 +229,7 @@ const MetricCard = ({ template, score, index }) => {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 const AIBiasGrid = () => {
-    const { results, isLoading } = useBias();
+    const { results, isLoading, isLargeDataset } = useBias();
 
     // Derive scores for each metric
     const scores = METRIC_TEMPLATES.map((t) => {
@@ -261,6 +261,22 @@ const AIBiasGrid = () => {
                         background: 'var(--accent-primary)', boxShadow: '0 0 8px var(--accent-primary)',
                     }}
                 />
+                {isLargeDataset && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        style={{
+                            marginLeft: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem',
+                            padding: '0.25rem 0.75rem', borderRadius: '4px',
+                            background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)',
+                        }}
+                    >
+                        <ShieldCheck size={12} color="#f59e0b" />
+                        <span style={{ fontFamily: 'JetBrains Mono', fontSize: '0.6rem', color: '#f59e0b', fontWeight: 700 }}>
+                            OPTIMIZED_FOR_LARGE_DATA
+                        </span>
+                    </motion.div>
+                )}
                 {results && (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.8 }}

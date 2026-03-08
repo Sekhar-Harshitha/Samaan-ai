@@ -1,8 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Download, ShieldCheck, Award, CheckCircle } from 'lucide-react';
+import { useBias } from '../context/BiasContext';
 
 const FairnessCertificate = ({ modelName = "Credit_Risk_Model_v4", date = new Date().toLocaleDateString() }) => {
+    const { generateCertificate } = useBias();
+
     return (
         <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -57,7 +60,11 @@ const FairnessCertificate = ({ modelName = "Credit_Risk_Model_v4", date = new Da
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem' }}>
-                    <button className="btn-command" style={{ padding: '0.8rem 2rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <button
+                        className="btn-command"
+                        style={{ padding: '0.8rem 2rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}
+                        onClick={() => generateCertificate()}
+                    >
                         DOWNLOAD_PDF <Download size={18} />
                     </button>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#10b981', fontSize: '0.8rem' }}>

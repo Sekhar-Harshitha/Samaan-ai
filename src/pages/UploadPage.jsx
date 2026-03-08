@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../components/PageWrapper';
-import { Loader2, AlertTriangle, CheckCircle, ChevronRight, Binary, Cpu, Play } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle, ChevronRight, Binary, Cpu, Play, X } from 'lucide-react';
 import { useBias } from '../context/BiasContext';
 import LiveAnalysisOverlay from '../components/LiveAnalysisOverlay';
 
@@ -37,7 +37,6 @@ const FileDropZone = ({ label, sublabel, accept, icon: Icon, accentColor, file, 
                 overflow: 'hidden',
             }}
         >
-            {/* Top glow bar shown when file selected */}
             {file && (
                 <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
@@ -126,18 +125,21 @@ const FieldInput = ({ label, sublabel, value, onChange, placeholder }) => (
 // ── Main page ─────────────────────────────────────────────────────────────────
 const UploadPage = () => {
     const navigate = useNavigate();
-    const { runAnalysis, runDatasetAudit, isLoading, error } = useBias();
+    const { runAnalysis, runDatasetAudit, isLoading, error, clearResults } = useBias();
 
     const [modelFile, setModelFile] = useState(null);
     const [datasetFile, setDatasetFile] = useState(null);
     const [sensitiveCol, setSensitiveCol] = useState('gender');
     const [targetCol, setTargetCol] = useState('income');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [localError, setLocalError] = useState(null);
 
     const canRun = modelFile && datasetFile && !isLoading;
 
     const handleRun = async () => {
         if (!canRun) return;
+        setLocalError(null);
+        clearResults();
 
         const formData = new FormData();
         formData.append('model_file', modelFile);
@@ -145,26 +147,37 @@ const UploadPage = () => {
         formData.append('sensitive_col', sensitiveCol.trim() || 'gender');
         formData.append('target_col', targetCol.trim() || 'income');
 
-        setIsAnalyzing(true);
-        try {
-            const auditFormData = new FormData();
-            auditFormData.append('dataset_file', datasetFile);
+        const auditFormData = new FormData();
+        auditFormData.append('dataset_file', datasetFile);
 
-            // Run analysis and dataset audit concurrently
-            await Promise.all([
-                runAnalysis(formData),
-                runDatasetAudit(auditFormData)
-            ]);
-        } catch {
+        setIsAnalyzing(true);
+
+        try {
+            // Fire both — runAnalysis handles its own polling
+            runAnalysis(formData);
+            runDatasetAudit(auditFormData);
+        } catch (err) {
+            setLocalError(err?.message || 'Failed to start analysis. Check backend connection.');
             setIsAnalyzing(false);
         }
     };
 
+    const handleOverlayCancel = () => {
+        setIsAnalyzing(false);
+        setLocalError('Analysis cancelled.');
+    };
+
+    // Auto-dismiss overlay if a hard error occurs
+    const displayError = localError || error;
+
     return (
         <PageWrapper>
             <AnimatePresence>
-                {isAnalyzing && (
-                    <LiveAnalysisOverlay onComplete={() => navigate('/dashboard')} />
+                {isAnalyzing && !displayError && (
+                    <LiveAnalysisOverlay
+                        onComplete={() => { setIsAnalyzing(false); navigate('/dashboard'); }}
+                        onCancel={handleOverlayCancel}
+                    />
                 )}
             </AnimatePresence>
 
@@ -218,12 +231,12 @@ const UploadPage = () => {
                     ATTRIBUTE_MAPPING_MATRIX
                 </h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '2rem' }}>
-                    Configure which columns in your dataset represent the protected attribute and the prediction target.
+                    Configure which columns represent the protected attribute and prediction target.
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem' }}>
                     <FieldInput
                         label="SENSITIVE_ATTRIBUTE_COLUMN"
-                        sublabel="The protected/demographic feature to audit for bias (e.g. gender, race, age)"
+                        sublabel="The protected/demographic feature to audit (e.g. gender, race, age)"
                         value={sensitiveCol}
                         onChange={setSensitiveCol}
                         placeholder="gender"
@@ -240,7 +253,7 @@ const UploadPage = () => {
 
             {/* Error display */}
             <AnimatePresence>
-                {error && (
+                {displayError && (
                     <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -254,12 +267,18 @@ const UploadPage = () => {
                         }}
                     >
                         <AlertTriangle size={20} color="#ef4444" style={{ flexShrink: 0 }} />
-                        <div>
+                        <div style={{ flex: 1 }}>
                             <p style={{ fontFamily: 'JetBrains Mono', fontSize: '0.7rem', color: '#ef4444', marginBottom: '0.3rem' }}>
                                 ANALYSIS_FAILED
                             </p>
-                            <p style={{ fontSize: '0.85rem', color: '#fca5a5' }}>{error}</p>
+                            <p style={{ fontSize: '0.85rem', color: '#fca5a5' }}>{displayError}</p>
                         </div>
+                        <button
+                            onClick={() => { setLocalError(null); setIsAnalyzing(false); }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}
+                        >
+                            <X size={16} />
+                        </button>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -302,7 +321,6 @@ const UploadPage = () => {
                 )}
             </motion.button>
 
-            {/* Hint when files not yet selected */}
             {(!modelFile || !datasetFile) && (
                 <p style={{
                     textAlign: 'center', marginTop: '1rem',
@@ -318,9 +336,7 @@ const UploadPage = () => {
                 </p>
             )}
 
-            <style>{`
-                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            `}</style>
+            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </PageWrapper>
     );
 };

@@ -18,6 +18,30 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
+def detect_columns(df: pd.DataFrame):
+    """Detects likely target and sensitive columns based on priority."""
+    target_priority = ["income", "label", "target", "outcome", "class", "y"]
+    sensitive_priority = ["sex", "gender", "race", "age", "ethnicity"]
+    
+    target = None
+    sensitive = None
+    
+    cols = [c.lower() for c in df.columns]
+    
+    # Priority-based detection for sensitive attribute
+    for s in sensitive_priority:
+        if s in cols:
+            sensitive = df.columns[cols.index(s)]
+            break
+            
+    # Priority-based detection for target variable
+    for t in target_priority:
+        if t in cols:
+            target = df.columns[cols.index(t)]
+            break
+            
+    return target, sensitive
+
 def compute_mitigation(
     model,
     df: pd.DataFrame,
@@ -28,8 +52,8 @@ def compute_mitigation(
 
     # 1. Normalize columns
     df.columns = df.columns.str.strip().str.lower()
-    target_col = target_col.strip().lower()
-    sensitive_col = sensitive_col.strip().lower()
+    target_col = target_col.strip().lower() if target_col else None
+    sensitive_col = sensitive_col.strip().lower() if sensitive_col else None
 
     mapping = {
         "education.num": "education-num",
@@ -41,15 +65,34 @@ def compute_mitigation(
     }
     df = df.rename(columns=mapping)
 
+    # Auto-detection logic
+    detected_target, detected_sensitive = detect_columns(df)
+    
+    auto_target_used = False
+    auto_sensitive_used = False
+
+    if not target_col or target_col not in df.columns:
+        if detected_target:
+            target_col = detected_target
+            auto_target_used = True
+        else:
+            raise ValueError("Target column missing and could not be auto-detected.")
+            
+    if not sensitive_col or sensitive_col not in df.columns:
+        if detected_sensitive:
+            sensitive_col = detected_sensitive
+            auto_sensitive_used = True
+        else:
+            raise ValueError("Sensitive column missing and could not be auto-detected.")
+
     # 2. Handle Target
-    if target_col in df.columns:
-        df[target_col] = (
-            df[target_col]
-            .astype(str)
-            .str.strip()
-            .replace({"<=50k": 0, ">50k": 1, "<=50K": 0, ">50K": 1})
-        )
-        df[target_col] = pd.to_numeric(df[target_col], errors="coerce").fillna(0).astype(int)
+    df[target_col] = (
+        df[target_col]
+        .astype(str)
+        .str.strip()
+        .replace({"<=50k": 0, ">50k": 1, "<=50K": 0, ">50K": 1})
+    )
+    df[target_col] = pd.to_numeric(df[target_col], errors="coerce").fillna(0).astype(int)
 
     # 3. Features
     if hasattr(model, "feature_names_in_"):
@@ -64,9 +107,6 @@ def compute_mitigation(
         else:
             X_data[feat] = 0
 
-    if target_col not in df.columns or sensitive_col not in df.columns:
-        raise ValueError("Target or Sensitive column missing.")
-
     y_true = df[target_col]
     sensitive = df[sensitive_col]
 
@@ -75,7 +115,7 @@ def compute_mitigation(
     for col in X_encoded.select_dtypes(include=["object", "category"]).columns:
         X_encoded[col] = pd.Categorical(X_encoded[col]).codes
 
-    # 4. Before Mitigation Metrics (using model predictions)
+    # 4. Before Mitigation Metrics
     try:
         X_inference = X_encoded[expected_features]
         y_pred_before = model.predict(X_inference)
@@ -88,30 +128,19 @@ def compute_mitigation(
     except Exception as e:
         raise ValueError(f"Failed to generate predictions for before metrics: {e}")
 
-    before_metrics = {
-        "accuracy": round(acc_before, 4),
-        "fairness_score": round(1.0 - abs(dpd_before), 4),
-        "demographic_parity_difference": round(abs(dpd_before), 4),
-        "equal_opportunity_difference": round(abs(eod_before), 4)
-    }
-
     if technique == "Reweighing":
         try:
-            # W = P(S)*P(Y) / P(S, Y)
             s_prob = sensitive.value_counts(normalize=True).to_dict()
             y_prob = y_true.value_counts(normalize=True).to_dict()
             
-            # Create weight column
             weights = np.zeros(len(df))
             for i, (s_val, y_val) in enumerate(zip(sensitive, y_true)):
-                # Probability of intersection
                 sy_prob = len(df[(sensitive == s_val) & (y_true == y_val)]) / len(df)
                 if sy_prob > 0:
                     weights[i] = (s_prob[s_val] * y_prob[y_val]) / sy_prob
                 else:
                     weights[i] = 1.0
                     
-            # Train model with weights
             base_model = LogisticRegression(solver='liblinear')
             base_model.fit(X_inference, y_true, sample_weight=weights)
             y_pred_after = base_model.predict(X_inference)
@@ -150,7 +179,6 @@ def compute_mitigation(
             strategy = "Threshold Adjustment"
         except Exception as e:
             try:
-                # Exponentiated gradient fallback if model lacks predict_proba / prefit fails
                 base_estimator = LogisticRegression(solver='liblinear')
                 mitigater = ExponentiatedGradient(base_estimator, DemographicParity())
                 mitigater.fit(X_inference, y_true, sensitive_features=sensitive)
@@ -169,15 +197,29 @@ def compute_mitigation(
                 eod_after = eod_before
                 strategy = f"Mitigation Failed: {str(e2)[:50]}"
 
-    after_metrics = {
-        "accuracy": round(acc_after, 4),
-        "fairness_score": round(1.0 - abs(dpd_after), 4),
-        "demographic_parity_difference": round(abs(dpd_after), 4),
-        "equal_opportunity_difference": round(abs(eod_after), 4)
-    }
-
     return {
-        "before_mitigation": before_metrics,
-        "after_mitigation": after_metrics,
-        "recommended_strategy": strategy
+        "accuracy_before": round(float(acc_before), 4),
+        "accuracy_after": round(float(acc_after), 4),
+        "fairness_before": round(float(1.0 - abs(dpd_before)), 4),
+        "fairness_after": round(float(1.0 - abs(dpd_after)), 4),
+        "dpd_before": round(float(abs(dpd_before)), 4),
+        "dpd_after": round(float(abs(dpd_after)), 4),
+        "eod_before": round(float(abs(eod_before)), 4),
+        "eod_after": round(float(abs(eod_after)), 4),
+        "before_mitigation": {
+            "accuracy": round(float(acc_before), 4),
+            "fairness_score": round(1.0 - abs(dpd_before), 4),
+            "demographic_parity_difference": round(abs(dpd_before), 4),
+            "equal_opportunity_difference": round(abs(eod_before), 4)
+        },
+        "after_mitigation": {
+            "accuracy": round(float(acc_after), 4),
+            "fairness_score": round(1.0 - abs(dpd_after), 4),
+            "demographic_parity_difference": round(abs(dpd_after), 4),
+            "equal_opportunity_difference": round(abs(eod_after), 4)
+        },
+        "recommended_strategy": strategy,
+        "auto_detected_target": auto_target_used,
+        "auto_detected_sensitive": auto_sensitive_used,
+        "status": "success"
     }

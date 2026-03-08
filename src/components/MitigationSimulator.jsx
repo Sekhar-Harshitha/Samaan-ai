@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, UploadCloud, Activity, Zap, ShieldCheck } from 'lucide-react';
+import { Play, UploadCloud, Activity, Zap, ShieldCheck, AlertTriangle } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
@@ -19,10 +19,22 @@ const MitigationSimulator = () => {
     };
 
     const runMitigation = async () => {
+        console.log("[MITIGATION_PROTOCOL] Initializing simulation...");
+        console.log(`[VALIDATION] Model loaded: ${!!files.model}, Dataset loaded: ${!!files.dataset}`);
+        console.log(`[VALIDATION] Sensitive: ${sensitiveCol}, Target: ${targetCol}`);
+
         if (!files.model || !files.dataset) {
-            setError('Both model (.pkl) and dataset (.csv) are required.');
+            console.warn("[VALIDATION_FAILED] Missing required files.");
+            setError('Please upload both the model binary (.pkl) and evaluation dataset (.csv) before initiating mitigation.');
             return;
         }
+
+        if (!sensitiveCol || !targetCol) {
+            console.warn("[VALIDATION_FAILED] Missing column identifiers.");
+            setError('Sensitive attribute and Target variable identifiers are required for protocol execution.');
+            return;
+        }
+
         setError('');
         setLoading(true);
 
@@ -34,48 +46,64 @@ const MitigationSimulator = () => {
         formData.append('technique', technique);
 
         try {
+            console.log(`[API_REQUEST] POST /mitigate // Technique: ${technique}`);
             const response = await fetch('http://localhost:8000/mitigate', {
                 method: 'POST',
                 body: formData,
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP Error: ${response.status}`);
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || `HTTP Protocol Error: ${response.status}`);
             }
 
             const data = await response.json();
-            setResults(data);
+            console.log("[API_RESPONSE] Received mitigation metrics:", data);
+
+            if (data.status === 'error') {
+                console.error("[MITIGATION_FAILED] Backend reported error:", data.message);
+                setError(data.message);
+            } else {
+                setResults(data);
+            }
         } catch (err) {
-            setError(err.message || 'Mitigation failed.');
+            console.error("[CRITICAL_FAILURE] Error during mitigation pipeline:", err);
+            setError(`MITIGATION_FAILURE_NODE_COMMUNICATION: ${err.message}`);
         } finally {
             setLoading(false);
         }
     };
 
     const getChartData = () => {
-        if (!results) return [];
-        return [
+        if (!results || results.status === 'error') {
+            console.log("[CHART_DATA] Skipping mapping: No valid results available.");
+            return [];
+        }
+
+        const data = [
             {
                 metric: 'Accuracy',
-                Before: results.before_mitigation.accuracy,
-                After: results.after_mitigation.accuracy,
+                Before: results.accuracy_before || results.before_mitigation?.accuracy || 0,
+                After: results.accuracy_after || results.after_mitigation?.accuracy || 0,
             },
             {
                 metric: 'Fairness Score',
-                Before: results.before_mitigation.fairness_score,
-                After: results.after_mitigation.fairness_score,
+                Before: results.fairness_before || results.before_mitigation?.fairness_score || 0,
+                After: results.fairness_after || results.after_mitigation?.fairness_score || 0,
             },
             {
                 metric: 'Demographic Parity Diff',
-                Before: results.before_mitigation.demographic_parity_difference,
-                After: results.after_mitigation.demographic_parity_difference,
+                Before: results.dpd_before || results.before_mitigation?.demographic_parity_difference || 0,
+                After: results.dpd_after || results.after_mitigation?.demographic_parity_difference || 0,
             },
             {
                 metric: 'Equal Opportunity Diff',
-                Before: results.before_mitigation.equal_opportunity_difference,
-                After: results.after_mitigation.equal_opportunity_difference,
+                Before: results.eod_before || results.before_mitigation?.equal_opportunity_difference || 0,
+                After: results.eod_after || results.after_mitigation?.equal_opportunity_difference || 0,
             }
         ];
+        console.log("[CHART_DATA] Mapped visualization data:", data);
+        return data;
     };
 
     return (
@@ -134,6 +162,16 @@ const MitigationSimulator = () => {
                 </div>
 
                 {error && <div style={{ color: 'var(--alert-error)', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</div>}
+                {results?.auto_detected_sensitive && (
+                    <div style={{ color: '#f59e0b', marginBottom: '1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <AlertTriangle size={14} /> Sensitive attribute not detected. Using automatic detection.
+                    </div>
+                )}
+                {results?.auto_detected_target && (
+                    <div style={{ color: '#f59e0b', marginBottom: '1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <AlertTriangle size={14} /> Target variable not detected. Using automatic detection.
+                    </div>
+                )}
 
                 <button
                     className="btn-command"
@@ -201,16 +239,16 @@ const MitigationSimulator = () => {
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>BEFORE_MITIGATION</div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span>Accuracy:</span> <strong>{results.before_mitigation.accuracy}</strong>
+                                    <span>Accuracy:</span> <strong>{results.before_mitigation?.accuracy ?? 0}</strong>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span>Fairness Score:</span> <strong>{results.before_mitigation.fairness_score}</strong>
+                                    <span>Fairness Score:</span> <strong>{results.before_mitigation?.fairness_score ?? 0}</strong>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span>DPD:</span> <strong className="text-error">{results.before_mitigation.demographic_parity_difference}</strong>
+                                    <span>DPD:</span> <strong className="text-error">{results.before_mitigation?.demographic_parity_difference ?? 0}</strong>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span>EOD:</span> <strong className="text-error">{results.before_mitigation.equal_opportunity_difference}</strong>
+                                    <span>EOD:</span> <strong className="text-error">{results.before_mitigation?.equal_opportunity_difference ?? 0}</strong>
                                 </div>
                             </div>
                         </div>
@@ -219,16 +257,16 @@ const MitigationSimulator = () => {
                             <div style={{ fontSize: '0.8rem', color: 'var(--accent-primary)', marginBottom: '0.5rem' }}>AFTER_MITIGATION</div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span>Accuracy:</span> <strong>{results.after_mitigation.accuracy}</strong>
+                                    <span>Accuracy:</span> <strong>{results.after_mitigation?.accuracy ?? 0}</strong>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span>Fairness Score:</span> <strong className="text-accent">{results.after_mitigation.fairness_score}</strong>
+                                    <span>Fairness Score:</span> <strong className="text-accent">{results.after_mitigation?.fairness_score ?? 0}</strong>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span>DPD:</span> <strong className="text-accent">{results.after_mitigation.demographic_parity_difference}</strong>
+                                    <span>DPD:</span> <strong className="text-accent">{results.after_mitigation?.demographic_parity_difference ?? 0}</strong>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span>EOD:</span> <strong className="text-accent">{results.after_mitigation.equal_opportunity_difference}</strong>
+                                    <span>EOD:</span> <strong className="text-accent">{results.after_mitigation?.equal_opportunity_difference ?? 0}</strong>
                                 </div>
                             </div>
                         </div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Shield, CheckCircle2, AlertTriangle, XCircle, Database, Eye, Zap } from 'lucide-react';
+import { useBias } from '../context/BiasContext';
 
 // eslint-disable-next-line no-unused-vars
 const ComplianceItem = ({ label, status, icon: IconComponent, description }) => {
@@ -39,6 +40,9 @@ const ComplianceItem = ({ label, status, icon: IconComponent, description }) => 
 };
 
 const AIGovernancePanel = ({ compliance }) => {
+    const { generateCertificate } = useBias();
+    const [loading, setLoading] = React.useState(false);
+
     if (!compliance) return null;
 
     const checks = [
@@ -70,6 +74,17 @@ const AIGovernancePanel = ({ compliance }) => {
 
     const isTotalPass = compliance.eu_ai_act_compliance === 'PASS';
     const totalColor = isTotalPass ? 'var(--accent-primary)' : compliance.eu_ai_act_compliance === 'WARNING' ? '#f59e0b' : '#ef4444';
+
+    const handleGenerate = async () => {
+        setLoading(true);
+        const success = await generateCertificate();
+        if (success) {
+            alert("AI Compliance Certificate Generated Successfully");
+        } else {
+            alert("Run Bias Analysis before generating certificate.");
+        }
+        setLoading(false);
+    };
 
     return (
         <motion.div
@@ -106,8 +121,13 @@ const AIGovernancePanel = ({ compliance }) => {
                 ))}
             </div>
 
-            <button className="btn-command" style={{ width: '100%', padding: '0.75rem' }}>
-                GENERATE_CERTIFICATE
+            <button
+                className="btn-command"
+                style={{ width: '100%', padding: '0.75rem', opacity: loading ? 0.5 : 1 }}
+                onClick={handleGenerate}
+                disabled={loading}
+            >
+                {loading ? 'GENERATING...' : 'GENERATE_CERTIFICATE'}
             </button>
         </motion.div>
     );

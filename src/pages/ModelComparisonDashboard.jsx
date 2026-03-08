@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, BarChart, HardDrive, FileText, CheckCircle, AlertTriangle, Trophy, Plus, X, Loader2 } from 'lucide-react';
 import axios from 'axios';
-import { BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import PageWrapper from '../components/PageWrapper';
 
 const ModelComparisonDashboard = () => {
@@ -41,7 +41,9 @@ const ModelComparisonDashboard = () => {
         formData.append('target_col', 'income');   // Defaulting for demo
 
         try {
+            console.log("DEBUG: Executing comparison for", modelFiles.length, "models");
             const response = await axios.post('http://localhost:8000/compare_models', formData);
+            console.log("DEBUG: Comparison Response:", response.data);
             setComparisonData(response.data.models);
         } catch (err) {
             console.error(err);
@@ -51,12 +53,15 @@ const ModelComparisonDashboard = () => {
         }
     };
 
-    const bestModel = comparisonData ? [...comparisonData].sort((a, b) => {
+    const bestModel = comparisonData ? [...comparisonData].filter(m => m.status === 'success').sort((a, b) => {
         // Simple heuristic: 0.7 * fairness + 0.3 * accuracy
-        const scoreA = 0.7 * a.fairness_score + 0.3 * (a.accuracy * 100);
-        const scoreB = 0.7 * b.fairness_score + 0.3 * (b.accuracy * 100);
+        const scoreA = 0.7 * a.fairness + 0.3 * a.accuracy;
+        const scoreB = 0.7 * b.fairness + 0.3 * b.accuracy;
         return scoreB - scoreA;
     })[0] : null;
+
+    console.log("DEBUG: Current Comparison Data:", comparisonData);
+    console.log("DEBUG: Recommended Model:", bestModel);
 
     return (
         <PageWrapper>
@@ -124,41 +129,66 @@ const ModelComparisonDashboard = () => {
                     )}
                 </div>
 
-                {/* Results Section */}
-                <div className="glass-panel" style={{ padding: '2rem', minHeight: '500px' }}>
-                    {!comparisonData ? (
-                        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.5 }}>
-                            <BarChart size={48} color="var(--border-color)" style={{ marginBottom: '1rem' }} />
-                            <p style={{ fontFamily: 'JetBrains Mono', fontSize: '0.75rem' }}>AWAITING_DATA_INPUT...</p>
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                            {/* Chart Area */}
-                            <div>
-                                <h3 style={{ fontSize: '1rem', fontFamily: 'JetBrains Mono', marginBottom: '1.5rem' }}>ACCURACY_VS_FAIRNESS_MATRIX</h3>
-                                <div style={{ width: '100%', height: '300px' }}>
+                {!comparisonData ? (
+                    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.5 }}>
+                        <BarChart size={48} color="var(--border-color)" style={{ marginBottom: '1rem' }} />
+                        <p style={{ fontFamily: 'JetBrains Mono', fontSize: '0.75rem' }}>AWAITING_DATA_INPUT...</p>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
+                        {/* Accuracy vs Fairness Scatter Plot Area */}
+                        <div>
+                            <h3 style={{ fontSize: '0.9rem', fontFamily: 'JetBrains Mono', marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>ACCURACY_VS_FAIRNESS_MATRIX</h3>
+                            <div style={{ width: '100%', height: '400px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', padding: '1rem' }}>
+                                {comparisonData.filter(m => m.status === 'success').length < 2 ? (
+                                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b', fontSize: '0.8rem', fontFamily: 'JetBrains Mono', textAlign: 'center' }}>
+                                        <AlertTriangle size={16} style={{ marginRight: '0.5rem' }} />
+                                        UPLOAD AT LEAST TWO MODELS TO RUN A COMPARISON.
+                                    </div>
+                                ) : (
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <ReBarChart data={comparisonData}>
+                                        <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 10 }}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                                            <XAxis dataKey="model" stroke="var(--text-secondary)" fontSize={10} />
-                                            <YAxis stroke="var(--text-secondary)" fontSize={10} />
+                                            <XAxis
+                                                type="number"
+                                                dataKey="accuracy"
+                                                name="Accuracy"
+                                                unit="%"
+                                                domain={[0, 100]}
+                                                stroke="var(--text-secondary)"
+                                                fontSize={10}
+                                                label={{ value: 'Accuracy (%)', position: 'bottom', fill: 'var(--text-secondary)', fontSize: 10 }}
+                                            />
+                                            <YAxis
+                                                type="number"
+                                                dataKey="fairness"
+                                                name="Fairness"
+                                                unit="%"
+                                                domain={[0, 100]}
+                                                stroke="var(--text-secondary)"
+                                                fontSize={10}
+                                                label={{ value: 'Fairness Score (%)', angle: -90, position: 'left', fill: 'var(--text-secondary)', fontSize: 10 }}
+                                            />
+                                            <ZAxis type="category" dataKey="model" name="Model" />
                                             <Tooltip
+                                                cursor={{ strokeDasharray: '3 3' }}
                                                 contentStyle={{ background: '#05070d', border: '1px solid var(--accent-primary)', fontSize: '12px' }}
                                                 itemStyle={{ color: 'var(--accent-primary)' }}
+                                                formatter={(value, name) => [value, name]}
                                             />
-                                            <Legend />
-                                            <Bar dataKey="accuracy" fill="#38BDF8" name="Accuracy" />
-                                            <Bar dataKey="fairness_score" fill="#10B981" name="Fairness Score">
-                                                {comparisonData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={entry.fairness_score > 80 ? '#10B981' : entry.fairness_score > 60 ? '#f59e0b' : '#ef4444'} />
+                                            <Scatter name="Models" data={comparisonData.filter(m => m.status === 'success')} fill="var(--accent-primary)">
+                                                {comparisonData.filter(m => m.status === 'success').map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.fairness > 80 ? '#10B981' : entry.fairness > 60 ? '#f59e0b' : '#ef4444'} />
                                                 ))}
-                                            </Bar>
-                                        </ReBarChart>
+                                            </Scatter>
+                                        </ScatterChart>
                                     </ResponsiveContainer>
-                                </div>
+                                )}
                             </div>
+                        </div>
 
-                            {/* Best Model Card */}
+                        {/* Best Model Card */}
+                        {bestModel && (
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -167,53 +197,68 @@ const ModelComparisonDashboard = () => {
                                 <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(56, 189, 248, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(56, 189, 248, 0.3)' }}>
                                     <Trophy size={30} color="var(--accent-primary)" />
                                 </div>
-                                <div>
+                                <div style={{ flex: 1 }}>
                                     <p style={{ fontSize: '0.65rem', color: 'var(--accent-primary)', fontFamily: 'JetBrains Mono', fontWeight: 800 }}>RECOMMENDED_MODEL</p>
                                     <h4 style={{ fontSize: '1.5rem', fontWeight: 800 }}>{bestModel.model}</h4>
                                     <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                        Highest weighted balance between High Fairness ({bestModel.fairness_score}%) and Predictive Accuracy ({Math.round(bestModel.accuracy * 100)}%).
+                                        Highest weighted balance between Fairness ({bestModel.fairness}%) and Predictive Accuracy ({bestModel.accuracy}%).
                                     </p>
                                 </div>
                             </motion.div>
+                        )}
 
-                            {/* Comparison Table */}
-                            <div style={{ overflowX: 'auto' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                                    <thead>
-                                        <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>
-                                            <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>MODEL_NAME</th>
-                                            <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>ACCURACY</th>
-                                            <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>FAIRNESS</th>
-                                            <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>RISK_LEVEL</th>
-                                            <th style={{ padding: '1rem', textAlign: 'right' }}>STATUS</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {comparisonData.map((model, idx) => (
-                                            <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: model.model === bestModel.model ? 'rgba(56, 189, 248, 0.03)' : 'transparent' }}>
-                                                <td style={{ padding: '1rem', fontWeight: 700 }}>{model.model}</td>
-                                                <td style={{ padding: '1rem' }}>{Math.round(model.accuracy * 100)}%</td>
-                                                <td style={{ padding: '1rem' }}>{model.fairness_score}%</td>
-                                                <td style={{ padding: '1rem' }}>
+                        {/* Comparison Table */}
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                <thead>
+                                    <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>
+                                        <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>MODEL_NAME</th>
+                                        <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>ACCURACY</th>
+                                        <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>FAIRNESS</th>
+                                        <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>BIAS_RISK</th>
+                                        <th style={{ padding: '1rem', textAlign: 'right' }}>STATUS</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {comparisonData.map((model, idx) => (
+                                        <tr key={idx} style={{
+                                            borderBottom: '1px solid rgba(255,255,255,0.03)',
+                                            background: model.status === 'error' ? 'rgba(239, 68, 68, 0.05)' : (bestModel && model.model === bestModel.model ? 'rgba(56, 189, 248, 0.03)' : 'transparent')
+                                        }}>
+                                            <td style={{ padding: '1rem', fontWeight: 700 }}>
+                                                {model.model}
+                                                {model.status === 'error' && (
+                                                    <div style={{ color: '#ef4444', fontSize: '0.65rem', fontWeight: 400, marginTop: '0.25rem' }}>
+                                                        {model.error_message}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td style={{ padding: '1rem' }}>{model.status === 'success' ? `${model.accuracy}%` : '--'}</td>
+                                            <td style={{ padding: '1rem' }}>{model.status === 'success' ? `${model.fairness}%` : '--'}</td>
+                                            <td style={{ padding: '1rem' }}>
+                                                {model.status === 'success' ? (
                                                     <span style={{
                                                         color: model.bias_risk === 'LOW' ? '#10b981' : model.bias_risk === 'MEDIUM' ? '#f59e0b' : '#ef4444',
-                                                        fontWeight: 700, fontSize: '0.7rem', fontFamily: 'JetBrains Mono', border: `1px solid ${model.bias_risk === 'LOW' ? '#10b981' : model.bias_risk === 'MEDIUM' ? '#f59e0b' : '#ef4444'}44`,
-                                                        padding: '0.2rem 0.5rem', borderRadius: '4px'
+                                                        fontWeight: 700, fontSize: '0.7rem', fontFamily: 'JetBrains Mono'
                                                     }}>
                                                         {model.bias_risk}
                                                     </span>
-                                                </td>
-                                                <td style={{ padding: '1rem', textAlign: 'right' }}>
-                                                    {model.fairness_score > 80 ? <CheckCircle size={16} color="#10b981" /> : <AlertTriangle size={16} color="#f59e0b" />}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                                                ) : '--'}
+                                            </td>
+                                            <td style={{ padding: '1rem', textAlign: 'right' }}>
+                                                {model.status === 'success' ? (
+                                                    model.fairness > 80 ? <CheckCircle size={16} color="#10b981" /> : <AlertTriangle size={16} color="#f59e0b" />
+                                                ) : (
+                                                    <X size={16} color="#ef4444" />
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
         </PageWrapper>
     );
