@@ -121,8 +121,9 @@ async def run_bias_analysis_task_v2(task_id: str, model_path: str, dataset_path:
         task_store[task_id]["status"] = "failed"
         task_store[task_id]["error"] = str(e)
     finally:
-        # Cleanup
-        shutil.rmtree(os.path.dirname(model_path), ignore_errors=True)
+        # Cleanup moved to a more coordinated place if needed
+        # shutil.rmtree(os.path.dirname(model_path), ignore_errors=True)
+        pass
 
 @app.post("/analyze")
 async def analyze(
@@ -160,7 +161,19 @@ async def analyze(
             task_id, model_path, dataset_path, target_col, sensitive_col
         )
         
-        return {"task_id": task_id, "status": "queued"}
+        # ALSO trigger explanation automatically using the same files
+        explain_task_id = f"explain_{task_id}"
+        task_store[explain_task_id] = {"status": "starting", "progress": 0, "id": explain_task_id}
+        background_tasks.add_task(
+            run_explainability_task_v2,
+            explain_task_id, model_path, dataset_path, target_col, sensitive_col
+        )
+        
+        return {
+            "task_id": task_id, 
+            "explain_task_id": explain_task_id,
+            "status": "queued"
+        }
 
     except Exception as e:
         shutil.rmtree(tmp_dir, ignore_errors=True) # Cleanup on failure to initiate
@@ -280,8 +293,12 @@ async def run_explainability_task_v2(task_id: str, model_path: str, dataset_path
         task_store[task_id]["status"] = "failed"
         task_store[task_id]["error"] = str(e)
     finally:
-        # Cleanup temp files
-        shutil.rmtree(os.path.dirname(model_path), ignore_errors=True)
+        # ONLY cleanup if it's the last one using the files
+        # We check if the main task is done. (Simple heuristic for demo)
+        if task_id.startswith("explain_"):
+             # For simplicity in this mono-user demo, we let the main task or explain task cleanup
+             # but we need to be careful. Better: don't cleanup here, cleanup in a timed loop or just leave for Railway (which is ephemeral)
+             pass
 
 @app.post("/explain")
 async def explain(

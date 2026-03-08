@@ -104,15 +104,12 @@ export function BiasProvider({ children }) {
 
 
         try {
-            const config = { timeout: 60_000 }; // 60s for initial upload
+            const config = { timeout: 300_000 }; // 5 minutes for uploading large models
 
-            const [analyzeRes, explainRes] = await Promise.allSettled([
-                axios.post(`${API}/analyze`, formData, config),
-                axios.post(`${API}/explain`, formData, config),
-            ]);
+            const analyzeRes = await axios.post(`${API}/analyze`, formData, config);
 
-            if (analyzeRes.status === 'fulfilled' && analyzeRes.value.data?.task_id) {
-                const jobId = analyzeRes.value.data.task_id;
+            if (analyzeRes.data?.task_id) {
+                const jobId = analyzeRes.data.task_id;
                 setAnalysisMessage('Analysis queued. Computing fairness metrics...');
                 setProgress(10);
                 pollTask({
@@ -130,42 +127,20 @@ export function BiasProvider({ children }) {
                     },
                     isExplain: false,
                 });
-            } else if (analyzeRes.status === 'fulfilled') {
+
+                // The backend started the explain task automatically
+                if (analyzeRes.data.explain_task_id) {
+                    pollTask({
+                        jobId: analyzeRes.data.explain_task_id,
+                        onDone: (data) => { setExplainResults(data); setIsExplainLoading(false); },
+                        onFail: (msg) => { setExplainError(msg); setIsExplainLoading(false); },
+                        isExplain: true,
+                    });
+                }
+            } else {
                 console.error("[INIT_FAILED] Backend returned success without task_id.");
                 setError("Protocol initiation error: System failed to generate analysis task ID.");
                 setIsLoading(false);
-            } else {
-                const reason = analyzeRes.reason;
-                const detail = reason?.response?.data?.detail
-                    || (reason?.code === 'ERR_NETWORK' ? 'Cannot connect to backend (port 8000). Is the server running?' : null)
-                    || reason?.message
-                    || 'Failed to initiate analysis.';
-                console.error("[INIT_FAILED] Analysis engine rejected request:", detail);
-                setError(detail);
-                setIsLoading(false);
-            }
-
-            if (explainRes.status === 'fulfilled' && explainRes.value.data?.task_id) {
-                const jobId = explainRes.value.data.task_id;
-                pollTask({
-                    jobId,
-                    onDone: (data) => { setExplainResults(data); setIsExplainLoading(false); },
-                    onFail: (msg) => { setExplainError(msg); setIsExplainLoading(false); },
-                    isExplain: true,
-                });
-            } else if (explainRes.status === 'fulfilled') {
-                console.warn("[INIT_PARTIAL] Explainability task ID missing.");
-                setExplainError("Explainability protocol initiation failed.");
-                setIsExplainLoading(false);
-            } else {
-                const detail = explainRes.reason?.response?.data?.detail || explainRes.reason?.message || 'Failed to initiate explainability.';
-                setExplainError(detail);
-                setIsExplainLoading(false);
-                // Only set a generic error if we don't already have one
-                if (analyzeRes.status !== 'fulfilled' &&
-                    analyzeRes.reason?.code === 'ERR_NETWORK') {
-                    setError('Backend unreachable. Please ensure the backend is running: uvicorn main:app --reload --port 8000');
-                }
             }
         } catch (err) {
             const detail = err?.code === 'ERR_NETWORK'
